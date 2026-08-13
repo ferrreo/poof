@@ -52,6 +52,44 @@ test "PostgreSQL migrations and feedback lifecycle" {
     });
     try std.testing.expectEqual(poof.domain.Role.member, member.role);
 
+    const pepper = [_]u8{0x77} ** 32;
+    var generated_token = poof.api_token.Generated.fromRaw(
+        [_]u8{0x41} ** poof.api_token.lookup_random_bytes,
+        [_]u8{0x52} ** poof.api_token.secret_random_bytes,
+        pepper,
+    );
+    defer generated_token.clear();
+    var scopes = poof.domain.ScopeSet{};
+    scopes.insert(.read);
+    scopes.insert(.issues_write);
+    scopes.insert(.admin_issues);
+    const stored_token = try database.createApiToken(
+        arena,
+        admin.id,
+        &generated_token.lookup,
+        generated_token.digest,
+        "Integration agent",
+        scopes,
+        30,
+    );
+    try std.testing.expectEqualStrings("Integration agent", stored_token.label);
+    var token_storage: [8]poof.store.ApiToken = undefined;
+    const tokens = try database.listApiTokens(arena, admin.id, &token_storage);
+    try std.testing.expectEqual(@as(usize, 1), tokens.len);
+    const parsed_token = try poof.api_token.parse(generated_token.slice(), pepper);
+    const api_principal = try database.apiPrincipal(
+        arena,
+        &parsed_token.lookup,
+        parsed_token.digest,
+    );
+    try std.testing.expectEqual(admin.id, api_principal.owner.id);
+    try std.testing.expect(api_principal.token.scopes.contains(.admin_issues));
+    try database.revokeApiToken(admin.id, stored_token.id);
+    try std.testing.expectError(
+        error.NotFound,
+        database.apiPrincipal(arena, &parsed_token.lookup, parsed_token.digest),
+    );
+
     var oauth_pair = poof.oauth_state.Pair.fromRaw(
         [_]u8{0x11} ** 32,
         [_]u8{0x22} ** 32,
@@ -243,6 +281,175 @@ test "Ploof public routes render persisted feedback" {
         "/auth/discord?return_to=/issues/new",
         new_issue.header("location").?,
     );
+
+    const admin = try database.upsertDiscordUser(std.testing.allocator, .{
+        .discord_id = "123456789012345678",
+        .username = "fer",
+        .display_name = "Fer",
+        .avatar_hash = null,
+        .role = .admin,
+    });
+    defer {
+        std.testing.allocator.free(admin.discord_id);
+        std.testing.allocator.free(admin.username);
+        if (admin.display_name) |value| std.testing.allocator.free(value);
+    }
+    var generated = poof.api_token.Generated.fromRaw(
+        [_]u8{0x61} ** poof.api_token.lookup_random_bytes,
+        [_]u8{0x62} ** poof.api_token.secret_random_bytes,
+        settings.api_token_pepper,
+    );
+    defer generated.clear();
+    var scopes = poof.domain.ScopeSet{};
+    scopes.insert(.read);
+    scopes.insert(.issues_write);
+    scopes.insert(.admin_issues);
+    const mcp_token = try database.createApiToken(
+        std.testing.allocator,
+        admin.id,
+        &generated.lookup,
+        generated.digest,
+        "MCP route test",
+        scopes,
+        30,
+    );
+    defer {
+        std.testing.allocator.free(mcp_token.lookup_prefix);
+        std.testing.allocator.free(mcp_token.label);
+    }
+    var authorization_storage: [128]u8 = undefined;
+    const authorization = try std.fmt.bufPrint(
+        &authorization_storage,
+        "Bearer {s}",
+        .{generated.slice()},
+    );
+    const mcp_headers = [_]ploof_testing.Request.Header{
+        .{ .name = "content-type", .value = "application/json" },
+        .{ .name = "accept", .value = "application/json" },
+        .{ .name = "authorization", .value = authorization },
+        .{ .name = "mcp-protocol-version", .value = "2025-06-18" },
+    };
+    const public_mcp_headers = [_]ploof_testing.Request.Header{
+        .{ .name = "content-type", .value = "application/json" },
+        .{ .name = "accept", .value = "application/json" },
+    };
+    const unauthenticated = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &public_mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":0,"method":"ping","params":{}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 401), unauthenticated.status);
+    const initialize = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 200), initialize.status);
+    try std.testing.expect(std.mem.indexOf(u8, initialize.body, "\"name\":\"poof\"") != null);
+
+    const list_tools = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 200), list_tools.status);
+    try std.testing.expect(std.mem.indexOf(u8, list_tools.body, "poof_list_issues") != null);
+    try std.testing.expect(std.mem.indexOf(u8, list_tools.body, "poof_update_issue") != null);
+
+    const call_tools = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"poof_list_issues","arguments":{"limit":5}}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 200), call_tools.status);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        call_tools.body,
+        "Add a portable JSON export",
+    ) != null);
+
+    const vote = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"poof_set_vote","arguments":{"idempotency_key":"vote-retry-001","issue_id":1,"selected":true}}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 200), vote.status);
+    const replay = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"poof_set_vote","arguments":{"idempotency_key":"vote-retry-001","issue_id":1,"selected":true}}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 200), replay.status);
+    try std.testing.expect(std.mem.indexOf(u8, replay.body, "Vote added") != null);
+    const conflict = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"poof_set_vote","arguments":{"idempotency_key":"vote-retry-001","issue_id":1,"selected":false}}}
+        ,
+    });
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        conflict.body,
+        "Idempotency key reused",
+    ) != null);
+
+    const query_token = try client.request(.{
+        .method = "POST",
+        .target = "/mcp?access_token=forbidden",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":8,"method":"ping","params":{}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 403), query_token.status);
+
+    _ = try database.pool.exec(
+        "UPDATE users SET role = 'member' WHERE id = $1",
+        .{admin.id},
+    );
+    const demoted = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":9,"method":"tools/list","params":{}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 200), demoted.status);
+    try std.testing.expect(std.mem.indexOf(u8, demoted.body, "poof_list_issues") != null);
+    try std.testing.expect(std.mem.indexOf(u8, demoted.body, "poof_update_issue") == null);
+
+    try database.revokeApiToken(admin.id, mcp_token.id);
+    const revoked = try client.request(.{
+        .method = "POST",
+        .target = "/mcp",
+        .headers = &mcp_headers,
+        .body =
+        \\{"jsonrpc":"2.0","id":4,"method":"ping","params":{}}
+        ,
+    });
+    try std.testing.expectEqual(@as(u16, 401), revoked.status);
+    try std.testing.expect(revoked.header("www-authenticate") != null);
 }
 
 fn webEnvironment(allocator: std.mem.Allocator) !std.process.Environ.Map {

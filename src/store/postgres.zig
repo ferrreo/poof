@@ -162,6 +162,221 @@ pub const Postgres = struct {
         , .{}) catch return error.DatabaseUnavailable;
     }
 
+    pub fn createApiToken(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        owner_id: i64,
+        lookup_prefix: []const u8,
+        digest: [32]u8,
+        label: []const u8,
+        scopes: domain.ScopeSet,
+        expires_days: ?u16,
+    ) models.Error!models.ApiToken {
+        if (label.len == 0 or label.len > 80 or scopes.bits == 0 or scopes.bits > 63) {
+            return error.Conflict;
+        }
+        const expiry: ?i32 = if (expires_days) |days| @intCast(days) else null;
+        var row = (self.pool.row(
+            \\INSERT INTO api_tokens (
+            \\    owner_id, lookup_prefix, token_digest, label, scopes, expires_at
+            \\) VALUES (
+            \\    $1, $2, $3, $4, $5,
+            \\    CASE WHEN $6::integer IS NULL
+            \\         THEN NULL
+            \\         ELSE now() + make_interval(days => $6)
+            \\    END
+            \\)
+            \\RETURNING id, lookup_prefix, label, scopes, expires_at,
+            \\          revoked_at IS NOT NULL, last_used_at, created_at
+        , .{
+            owner_id,
+            lookup_prefix,
+            pg.Binary{ .data = &digest },
+            label,
+            @as(i64, @intCast(scopes.bits)),
+            expiry,
+        }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        defer row.deinit() catch {};
+        return readApiTokenQuery(&row, allocator, 0);
+    }
+
+    pub fn listApiTokens(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        owner_id: i64,
+        output: []models.ApiToken,
+    ) models.Error![]models.ApiToken {
+        var result = self.pool.query(
+            \\SELECT id, lookup_prefix, label, scopes, expires_at,
+            \\       revoked_at IS NOT NULL, last_used_at, created_at
+            \\FROM api_tokens
+            \\WHERE owner_id = $1
+            \\ORDER BY created_at DESC
+            \\LIMIT 100
+        , .{owner_id}) catch return error.DatabaseUnavailable;
+        defer result.deinit();
+        var used: usize = 0;
+        while (result.next() catch return error.DatabaseUnavailable) |row| {
+            if (used == output.len) return error.CapacityExceeded;
+            output[used] = try readApiToken(row, allocator);
+            used += 1;
+        }
+        return output[0..used];
+    }
+
+    pub fn revokeApiToken(
+        self: *Postgres,
+        owner_id: i64,
+        token_id: [16]u8,
+    ) models.Error!void {
+        const affected = self.pool.exec(
+            \\UPDATE api_tokens SET revoked_at = now()
+            \\WHERE id = $1 AND owner_id = $2 AND revoked_at IS NULL
+        , .{ pg.Binary{ .data = &token_id }, owner_id }) catch
+            return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+    }
+
+    pub fn apiPrincipal(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        lookup_prefix: []const u8,
+        presented_digest: [32]u8,
+    ) models.Error!models.ApiPrincipal {
+        var row = (self.pool.row(
+            \\SELECT t.id, t.lookup_prefix, t.token_digest, t.label, t.scopes,
+            \\       t.expires_at, t.revoked_at IS NOT NULL, t.last_used_at,
+            \\       t.created_at,
+            \\       u.id, u.discord_id, u.username, u.display_name,
+            \\       u.avatar_hash, u.role, u.disabled_at IS NOT NULL,
+            \\       u.created_at, u.last_login_at
+            \\FROM api_tokens t
+            \\JOIN users u ON u.id = t.owner_id
+            \\WHERE t.lookup_prefix = $1
+            \\  AND t.revoked_at IS NULL
+            \\  AND (t.expires_at IS NULL OR t.expires_at > now())
+            \\  AND u.disabled_at IS NULL
+        , .{lookup_prefix}) catch return error.DatabaseUnavailable) orelse return error.NotFound;
+        defer row.deinit() catch {};
+        const stored_digest = row.get([]u8, 2) catch return error.InvalidDatabaseData;
+        if (stored_digest.len != 32 or !std.crypto.timing_safe.eql(
+            [32]u8,
+            stored_digest[0..32].*,
+            presented_digest,
+        )) return error.NotFound;
+
+        const id_bytes = row.get([]u8, 0) catch return error.InvalidDatabaseData;
+        if (id_bytes.len != 16) return error.InvalidDatabaseData;
+        const scopes_value = row.get(i64, 4) catch return error.InvalidDatabaseData;
+        if (scopes_value <= 0 or scopes_value > 63) return error.InvalidDatabaseData;
+        const token = models.ApiToken{
+            .id = id_bytes[0..16].*,
+            .lookup_prefix = try copyQueryColumn(&row, allocator, 1),
+            .label = try copyQueryColumn(&row, allocator, 3),
+            .scopes = .{ .bits = @intCast(scopes_value) },
+            .expires_at_us = row.get(?i64, 5) catch return error.InvalidDatabaseData,
+            .revoked = row.get(bool, 6) catch return error.InvalidDatabaseData,
+            .last_used_at_us = row.get(?i64, 7) catch return error.InvalidDatabaseData,
+            .created_at_us = row.get(i64, 8) catch return error.InvalidDatabaseData,
+        };
+        const owner = try readUserOffset(&row, allocator, 9);
+        _ = self.pool.exec(
+            "UPDATE api_tokens SET last_used_at = now() WHERE id = $1",
+            .{pg.Binary{ .data = &token.id }},
+        ) catch {};
+        return .{ .token = token, .owner = owner };
+    }
+
+    pub fn recordAutomation(
+        self: *Postgres,
+        token_id: [16]u8,
+        owner_id: i64,
+        method: []const u8,
+        tool_name: ?[]const u8,
+        outcome: []const u8,
+        summary: []const u8,
+    ) void {
+        _ = self.pool.exec(
+            \\INSERT INTO automation_events (
+            \\    token_id, owner_id, method, tool_name, outcome, summary
+            \\) VALUES ($1, $2, $3, $4, $5, $6)
+        , .{
+            pg.Binary{ .data = &token_id },
+            owner_id,
+            method,
+            tool_name,
+            outcome,
+            summary,
+        }) catch {};
+    }
+
+    pub fn apiRateAllowed(
+        self: *Postgres,
+        token_id: [16]u8,
+        limit: i64,
+    ) models.Error!bool {
+        var row = (self.pool.row(
+            \\SELECT count(*) < $2
+            \\FROM automation_events
+            \\WHERE token_id = $1
+            \\  AND created_at > now() - interval '1 minute'
+        , .{ pg.Binary{ .data = &token_id }, limit }) catch
+            return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        defer row.deinit() catch {};
+        return row.get(bool, 0) catch error.InvalidDatabaseData;
+    }
+
+    pub fn idempotencyResult(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        token_id: [16]u8,
+        tool_name: []const u8,
+        request_key: []const u8,
+        request_digest: [32]u8,
+    ) models.Error!?[]const u8 {
+        var row = (self.pool.row(
+            \\SELECT request_digest, response_body::text
+            \\FROM idempotency_keys
+            \\WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
+            \\  AND expires_at > now()
+        , .{
+            pg.Binary{ .data = &token_id },
+            tool_name,
+            request_key,
+        }) catch return error.DatabaseUnavailable) orelse return null;
+        defer row.deinit() catch {};
+        const stored_digest = row.get([]u8, 0) catch return error.InvalidDatabaseData;
+        if (stored_digest.len != 32 or !std.crypto.timing_safe.eql(
+            [32]u8,
+            stored_digest[0..32].*,
+            request_digest,
+        )) return error.Conflict;
+        return try copyQueryColumn(&row, allocator, 1);
+    }
+
+    pub fn saveIdempotency(
+        self: *Postgres,
+        token_id: [16]u8,
+        tool_name: []const u8,
+        request_key: []const u8,
+        request_digest: [32]u8,
+        response_json: []const u8,
+    ) models.Error!void {
+        _ = self.pool.exec(
+            \\INSERT INTO idempotency_keys (
+            \\    token_id, tool_name, request_key, request_digest,
+            \\    response_body, expires_at
+            \\) VALUES ($1, $2, $3, $4, $5::jsonb, now() + interval '24 hours')
+            \\ON CONFLICT (token_id, tool_name, request_key) DO NOTHING
+        , .{
+            pg.Binary{ .data = &token_id },
+            tool_name,
+            request_key,
+            pg.Binary{ .data = &request_digest },
+            response_json,
+        }) catch return error.DatabaseUnavailable;
+    }
+
     pub fn listBoards(
         self: *Postgres,
         allocator: std.mem.Allocator,
@@ -937,4 +1152,43 @@ fn copyOptionalColumn(
         allocator.dupe(u8, bytes) catch error.CapacityExceeded
     else
         null;
+}
+
+fn readApiToken(
+    row: pg.Row,
+    allocator: std.mem.Allocator,
+) models.Error!models.ApiToken {
+    const id = row.get([]u8, 0) catch return error.InvalidDatabaseData;
+    const scopes = row.get(i64, 3) catch return error.InvalidDatabaseData;
+    if (id.len != 16 or scopes <= 0 or scopes > 63) return error.InvalidDatabaseData;
+    return .{
+        .id = id[0..16].*,
+        .lookup_prefix = try copyColumn(row, allocator, 1),
+        .label = try copyColumn(row, allocator, 2),
+        .scopes = .{ .bits = @intCast(scopes) },
+        .expires_at_us = row.get(?i64, 4) catch return error.InvalidDatabaseData,
+        .revoked = row.get(bool, 5) catch return error.InvalidDatabaseData,
+        .last_used_at_us = row.get(?i64, 6) catch return error.InvalidDatabaseData,
+        .created_at_us = row.get(i64, 7) catch return error.InvalidDatabaseData,
+    };
+}
+
+fn readApiTokenQuery(
+    row: *pg.QueryRow,
+    allocator: std.mem.Allocator,
+    offset: usize,
+) models.Error!models.ApiToken {
+    const id = row.get([]u8, offset) catch return error.InvalidDatabaseData;
+    const scopes = row.get(i64, offset + 3) catch return error.InvalidDatabaseData;
+    if (id.len != 16 or scopes <= 0 or scopes > 63) return error.InvalidDatabaseData;
+    return .{
+        .id = id[0..16].*,
+        .lookup_prefix = try copyQueryColumn(row, allocator, offset + 1),
+        .label = try copyQueryColumn(row, allocator, offset + 2),
+        .scopes = .{ .bits = @intCast(scopes) },
+        .expires_at_us = row.get(?i64, offset + 4) catch return error.InvalidDatabaseData,
+        .revoked = row.get(bool, offset + 5) catch return error.InvalidDatabaseData,
+        .last_used_at_us = row.get(?i64, offset + 6) catch return error.InvalidDatabaseData,
+        .created_at_us = row.get(i64, offset + 7) catch return error.InvalidDatabaseData,
+    };
 }

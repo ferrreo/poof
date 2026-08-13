@@ -2,6 +2,8 @@ const ploof = @import("ploof");
 const app_state_module = @import("app_state.zig");
 const admin_handlers = @import("web/handlers/admin.zig");
 const auth_handlers = @import("web/handlers/auth.zig");
+const developer_handlers = @import("web/handlers/developer.zig");
+const mcp_transport = @import("mcp/transport.zig");
 const public_handlers = @import("web/handlers/public.zig");
 const csrf_module = @import("web/csrf.zig");
 const web_middleware = @import("web/middleware.zig");
@@ -20,6 +22,8 @@ pub const highlight = @import("web/highlight.zig");
 pub const markdown = @import("web/markdown.zig");
 pub const page = @import("web/page.zig");
 pub const web_request = @import("web/request.zig");
+pub const mcp_protocol = @import("mcp/protocol.zig");
+pub const mcp_tools = @import("mcp/tools.zig");
 pub const Assets = ploof.Asset.Bundle(@import("assets"));
 
 pub const State = app_state_module.State;
@@ -113,6 +117,15 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         "/auth/logout",
         auth_handlers.LogoutDefinition.handle(auth_handlers.logout),
     ),
+    ploof.get("/settings/developer/tokens", developer_handlers.index),
+    ploof.post(
+        "/settings/developer/tokens",
+        developer_handlers.CreateDefinition.handle(developer_handlers.create),
+    ),
+    ploof.post(
+        "/settings/developer/tokens/:id/revoke",
+        developer_handlers.RevokeDefinition.handle(developer_handlers.revoke),
+    ),
 });
 
 pub const App = ploof.Application(.{
@@ -122,6 +135,7 @@ pub const App = ploof.Application(.{
     .response_body_bytes_max = 512 * 1024,
     .routes = .{
         BrowserRoutes,
+        ploof.post("/mcp", mcp_transport.Definition.handle(mcp_transport.handle)),
         ploof.get("/live", Live.handle),
         ploof.get("/ready", Ready.handle),
         ploof.openMetrics("/metrics"),
@@ -135,6 +149,7 @@ pub const WebTestApp = ploof.Application(.{
     .response_body_bytes_max = 512 * 1024,
     .routes = .{
         BrowserRoutes,
+        ploof.post("/mcp", mcp_transport.Definition.handle(mcp_transport.handle)),
         ploof.get("/live", Live.handle),
         ploof.get("/ready", Ready.handle),
     },
@@ -167,6 +182,10 @@ test {
     _ = web_request;
     _ = auth_handlers;
     _ = admin_handlers;
+    _ = developer_handlers;
+    _ = mcp_transport;
+    _ = mcp_protocol;
+    _ = mcp_tools;
     _ = public_handlers;
     _ = csrf_module;
     _ = web_middleware;
