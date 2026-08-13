@@ -2,6 +2,11 @@ const ploof = @import("ploof");
 
 pub const config = @import("config.zig");
 pub const domain = @import("domain.zig");
+pub const api_token = @import("auth/api_token.zig");
+pub const cookie = @import("auth/cookie.zig");
+pub const discord = @import("auth/discord.zig");
+pub const oauth_state = @import("auth/oauth_state.zig");
+pub const session = @import("auth/session.zig");
 pub const store = @import("store.zig");
 pub const postgres = @import("store/postgres.zig");
 pub const store_migrations = @import("store/migrations.zig");
@@ -68,6 +73,11 @@ pub const TestApp = ploof.Application(.{
 test {
     _ = config;
     _ = domain;
+    _ = api_token;
+    _ = cookie;
+    _ = discord;
+    _ = oauth_state;
+    _ = session;
     _ = store;
     _ = postgres;
     _ = store_migrations;
