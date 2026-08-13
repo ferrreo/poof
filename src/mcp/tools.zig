@@ -92,6 +92,24 @@ pub const all = [_]Tool{
         ,
     },
     .{
+        .name = "poof_archive_board",
+        .description = "Archive a board while preserving historical issues. The final active board is protected.",
+        .scope = .admin_boards,
+        .admin = true,
+        .schema =
+        \\{"type":"object","required":["idempotency_key","board_id","confirm"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"board_id":{"type":"integer","minimum":1},"confirm":{"const":true}},"additionalProperties":false}
+        ,
+    },
+    .{
+        .name = "poof_update_board",
+        .description = "Edit and reorder an existing feedback board.",
+        .scope = .admin_boards,
+        .admin = true,
+        .schema =
+        \\{"type":"object","required":["idempotency_key","board_id","name","slug","sort_order"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"board_id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":80},"slug":{"type":"string","minLength":1,"maxLength":80,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"description":{"type":"string","maxLength":500},"color":{"type":"string","enum":["violet","blue","green","amber","rose","gray"]},"sort_order":{"type":"integer","minimum":0,"maximum":10000}},"additionalProperties":false}
+        ,
+    },
+    .{
         .name = "poof_create_changelog",
         .description = "Create a changelog draft. Publishing is a separate confirmed tool.",
         .scope = .admin_changelog,
@@ -107,6 +125,15 @@ pub const all = [_]Tool{
         .admin = true,
         .schema =
         \\{"type":"object","required":["idempotency_key","changelog_id","published","confirm"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"changelog_id":{"type":"integer","minimum":1},"published":{"type":"boolean"},"confirm":{"const":true}},"additionalProperties":false}
+        ,
+    },
+    .{
+        .name = "poof_update_changelog",
+        .description = "Edit a changelog draft and replace its linked completed issues.",
+        .scope = .admin_changelog,
+        .admin = true,
+        .schema =
+        \\{"type":"object","required":["idempotency_key","changelog_id","title","slug","summary","body"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"changelog_id":{"type":"integer","minimum":1},"title":{"type":"string","minLength":3,"maxLength":160},"slug":{"type":"string","minLength":1,"maxLength":180,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"summary":{"type":"string","minLength":1,"maxLength":500},"body":{"type":"string","minLength":1,"maxLength":65536},"version":{"type":"string","maxLength":64},"issue_ids":{"type":"array","maxItems":100,"uniqueItems":true,"items":{"type":"integer","minimum":1}}},"additionalProperties":false}
         ,
     },
 };

@@ -12,9 +12,9 @@ const highlight = @import("../highlight.zig");
 const ListQuery = struct {
     page: u16 = 1,
     sort: models.IssueSort = .top,
-    board_id: ?i64 = null,
-    kind: ?domain.IssueKind = null,
-    status: ?domain.IssueStatus = null,
+    board_id: i64 = 0,
+    kind: enum { all, feature, improvement, bug } = .all,
+    status: enum { all, pending, reviewing, planned, in_progress, completed, closed } = .all,
     q: ?[]const u8 = null,
 };
 
@@ -99,9 +99,22 @@ fn renderIssueList(
     var item_storage: [20]models.IssueSummary = undefined;
     const page_number = @max(query.page, 1);
     const result = database.listIssues(allocator, .{
-        .board_id = query.board_id,
-        .kind = query.kind,
-        .status = query.status,
+        .board_id = if (query.board_id > 0) query.board_id else null,
+        .kind = switch (query.kind) {
+            .all => null,
+            .feature => .feature,
+            .improvement => .improvement,
+            .bug => .bug,
+        },
+        .status = switch (query.status) {
+            .all => null,
+            .pending => .pending,
+            .reviewing => .reviewing,
+            .planned => .planned,
+            .in_progress => .in_progress,
+            .completed => .completed,
+            .closed => .closed,
+        },
         .query = query.q,
         .sort = query.sort,
         .limit = 20,
@@ -263,6 +276,14 @@ pub fn create(
     const current = (request.principal(context, workspace.allocator()) catch
         return context.empty(.service_unavailable)) orelse
         return context.empty(.unauthorized);
+    if (!(database.allowUserAction(
+        current.user.id,
+        "issue_create",
+        5,
+        60,
+    ) catch return context.empty(.service_unavailable))) {
+        return context.textStatic(.too_many_requests, "Please wait before creating more feedback.");
+    }
     const form = input.body;
     const issue_id = database.createIssue(current.user.id, .{
         .board_id = form.board_id,
@@ -295,6 +316,14 @@ pub fn vote(
         return context.empty(.service_unavailable);
     const current = (request.principal(context, workspace.allocator()) catch
         return context.empty(.service_unavailable)) orelse return context.empty(.unauthorized);
+    if (!(database.allowUserAction(
+        current.user.id,
+        "vote_change",
+        60,
+        60,
+    ) catch return context.empty(.service_unavailable))) {
+        return context.textStatic(.too_many_requests, "Please wait before voting again.");
+    }
     database.setVote(issue_id, current.user.id, input.body.selected) catch
         return context.empty(.service_unavailable);
     return redirectToIssue(context, database, workspace.allocator(), issue_id, "votes");
@@ -311,6 +340,14 @@ pub fn comment(
         return context.empty(.service_unavailable);
     const current = (request.principal(context, workspace.allocator()) catch
         return context.empty(.service_unavailable)) orelse return context.empty(.unauthorized);
+    if (!(database.allowUserAction(
+        current.user.id,
+        "comment_create",
+        20,
+        60,
+    ) catch return context.empty(.service_unavailable))) {
+        return context.textStatic(.too_many_requests, "Please wait before commenting again.");
+    }
     const comment_id = database.addComment(
         issue_id,
         current.user.id,
@@ -570,7 +607,7 @@ fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: Li
         try highlight.escapeHtml(writer, value);
         try writer.writeAll("\"");
     }
-    try writer.writeAll("></label><select name=\"board_id\"><option value=\"\">All boards</option>");
+    try writer.writeAll("></label><select name=\"board_id\"><option value=\"0\">All boards</option>");
     for (boards) |board| {
         try writer.print("<option value=\"{d}\"{s}>", .{
             board.id,
@@ -578,6 +615,22 @@ fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: Li
         });
         try highlight.escapeHtml(writer, board.name);
         try writer.writeAll("</option>");
+    }
+    try writer.writeAll("</select><select name=\"kind\"><option value=\"all\">All types</option>");
+    inline for (std.meta.tags(domain.IssueKind)) |kind| {
+        try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
+            @tagName(kind),
+            if (std.mem.eql(u8, @tagName(query.kind), @tagName(kind))) " selected" else "",
+            kind.label(),
+        });
+    }
+    try writer.writeAll("</select><select name=\"status\"><option value=\"all\">All statuses</option>");
+    inline for (std.meta.tags(domain.IssueStatus)) |status| {
+        try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
+            @tagName(status),
+            if (std.mem.eql(u8, @tagName(query.status), @tagName(status))) " selected" else "",
+            status.label(),
+        });
     }
     try writer.writeAll("</select><select name=\"sort\">");
     try writer.print("<option value=\"top\"{s}>Top</option>", .{
@@ -650,10 +703,10 @@ fn renderDiscussion(
         try writer.writeAll("<div class=\"comment-list\">");
         for (comments) |comment_value| {
             if (comment_value.parent_id != null) continue;
-            try renderComment(writer, comment_value, false);
+            try renderComment(writer, comment_value, false, csrf_input);
             for (comments) |reply| {
                 if (reply.parent_id != comment_value.id) continue;
-                try renderComment(writer, reply, true);
+                try renderComment(writer, reply, true, null);
             }
         }
         try writer.writeAll("</div>");
@@ -673,7 +726,12 @@ fn renderDiscussion(
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Post comment</button></form></section>");
 }
 
-fn renderComment(writer: *std.Io.Writer, comment_value: models.Comment, reply: bool) !void {
+fn renderComment(
+    writer: *std.Io.Writer,
+    comment_value: models.Comment,
+    reply: bool,
+    csrf_input: ?[]const u8,
+) !void {
     try writer.print(
         "<article class=\"comment{s}\" id=\"comment-{d}\"><header><strong>",
         .{ if (reply) " comment-reply" else "", comment_value.id },
@@ -681,7 +739,15 @@ fn renderComment(writer: *std.Io.Writer, comment_value: models.Comment, reply: b
     try highlight.escapeHtml(writer, comment_value.author_name);
     try writer.writeAll("</strong></header><div class=\"markdown\">");
     try markdown.render(writer, comment_value.body_markdown);
-    try writer.writeAll("</div></article>");
+    try writer.writeAll("</div>");
+    if (csrf_input) |hidden| {
+        try writer.writeAll("<details class=\"reply-composer\"><summary>Reply</summary><form method=\"post\" action=\"comments\">");
+        try writer.writeAll(hidden);
+        try writer.print("<input type=\"hidden\" name=\"parent_id\" value=\"{d}\">", .{comment_value.id});
+        try writer.writeAll("<textarea name=\"body\" required maxlength=\"4096\" rows=\"3\" aria-label=\"Reply\"></textarea>");
+        try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Post reply</button></form></details>");
+    }
+    try writer.writeAll("</article>");
 }
 
 fn renderVoteForm(

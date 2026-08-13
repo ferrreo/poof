@@ -51,6 +51,24 @@ test "PostgreSQL migrations and feedback lifecycle" {
         .role = .member,
     });
     try std.testing.expectEqual(poof.domain.Role.member, member.role);
+    try std.testing.expect(try database.allowUserAction(
+        member.id,
+        "vote_change",
+        2,
+        60,
+    ));
+    try std.testing.expect(try database.allowUserAction(
+        member.id,
+        "vote_change",
+        2,
+        60,
+    ));
+    try std.testing.expect(!try database.allowUserAction(
+        member.id,
+        "vote_change",
+        2,
+        60,
+    ));
 
     const pepper = [_]u8{0x77} ** 32;
     var generated_token = poof.api_token.Generated.fromRaw(
@@ -178,11 +196,20 @@ test "PostgreSQL migrations and feedback lifecycle" {
     try std.testing.expect(completed.locked);
     try std.testing.expectEqual(@as(i64, 2), completed.vote_count);
     try std.testing.expectEqual(@as(i64, 1), completed.comment_count);
+    try database.editIssueContent(issue_id, admin.id, .{
+        .title = "Portable JSON exports for self-hosters",
+        .body_markdown = "Self-hosters can now download a complete JSON backup of public feedback.",
+    });
+    const edited = try database.getIssue(arena, issue_id);
+    try std.testing.expectEqualStrings(
+        "portable-json-exports-for-self-hosters",
+        edited.slug,
+    );
 
     var issue_storage: [10]poof.store.IssueSummary = undefined;
     const listed = try database.listIssues(arena, .{
         .status = .completed,
-        .query = "portable export",
+        .query = "portable JSON",
         .limit = 10,
     }, &issue_storage);
     try std.testing.expectEqual(@as(i64, 1), listed.total);
@@ -194,6 +221,14 @@ test "PostgreSQL migrations and feedback lifecycle" {
         "integrations",
         "Requests for connected tools.",
         "blue",
+    );
+    try database.updateBoard(
+        board_id,
+        "Connected tools",
+        "connected-tools",
+        "Requests for connected tools.",
+        "green",
+        5,
     );
     try database.archiveBoard(board_id);
 
@@ -214,10 +249,18 @@ test "PostgreSQL migrations and feedback lifecycle" {
     );
     try std.testing.expectEqual(@as(usize, 1), drafts.len);
     try std.testing.expect(drafts[0].published_at_us == null);
+    try database.updateChangelog(changelog_id, .{
+        .slug = "portable-json-exports",
+        .title = "Portable JSON exports are here",
+        .summary = "Download a complete copy of feedback.",
+        .body_markdown = "Use the new **Export** action to download a complete JSON backup.",
+        .version = "0.1.0",
+        .tags = &.{"new-feature"},
+    });
     try database.publishChangelog(changelog_id, true);
     const published = try database.getChangelogBySlug(
         arena,
-        "portable-exports",
+        "portable-json-exports",
         true,
     );
     try std.testing.expectEqualStrings("0.1.0", published.version.?);
@@ -266,7 +309,7 @@ test "Ploof public routes render persisted feedback" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         home.body,
-        "Add a portable JSON export",
+        "Portable JSON exports for self-hosters",
     ) != null);
     try std.testing.expectEqualStrings(
         "nosniff",
@@ -280,7 +323,7 @@ test "Ploof public routes render persisted feedback" {
     const canonical = try client.get("/issues/1");
     try std.testing.expectEqual(@as(u16, 301), canonical.status);
     try std.testing.expectEqualStrings(
-        "/issues/1/add-a-portable-json-export",
+        "/issues/1/portable-json-exports-for-self-hosters",
         canonical.header("location").?,
     );
 
@@ -386,7 +429,7 @@ test "Ploof public routes render persisted feedback" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         call_tools.body,
-        "Add a portable JSON export",
+        "Portable JSON exports for self-hosters",
     ) != null);
 
     const vote = try client.request(.{
@@ -447,6 +490,19 @@ test "Ploof public routes render persisted feedback" {
     try std.testing.expectEqual(@as(u16, 200), demoted.status);
     try std.testing.expect(std.mem.indexOf(u8, demoted.body, "poof_list_issues") != null);
     try std.testing.expect(std.mem.indexOf(u8, demoted.body, "poof_update_issue") == null);
+    var automation_storage: [50]poof.store.AutomationEvent = undefined;
+    const automation_events = try database.listAutomationEvents(
+        std.testing.allocator,
+        admin.id,
+        &automation_storage,
+    );
+    defer for (automation_events) |event| {
+        std.testing.allocator.free(event.method);
+        if (event.tool_name) |value| std.testing.allocator.free(value);
+        std.testing.allocator.free(event.outcome);
+        std.testing.allocator.free(event.summary);
+    };
+    try std.testing.expect(automation_events.len >= 4);
 
     try database.revokeApiToken(admin.id, mcp_token.id);
     const revoked = try client.request(.{

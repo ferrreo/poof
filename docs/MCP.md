@@ -40,7 +40,10 @@ takes effect on the next request.
 - `poof_add_comment`
 - `poof_update_issue`
 - `poof_create_board`
+- `poof_update_board`
+- `poof_archive_board`
 - `poof_create_changelog`
+- `poof_update_changelog`
 - `poof_publish_changelog`
 
 Call `tools/list` for authoritative strict JSON Schemas. Unknown properties are

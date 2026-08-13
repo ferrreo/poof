@@ -53,6 +53,14 @@ pub fn create(
         return context.empty(.service_unavailable);
     const principal = (request.principal(context, workspace.allocator()) catch
         return context.empty(.service_unavailable)) orelse return context.empty(.unauthorized);
+    if (!(database.allowUserAction(
+        principal.user.id,
+        "token_create",
+        10,
+        3600,
+    ) catch return context.empty(.service_unavailable))) {
+        return context.textStatic(.too_many_requests, "Token creation limit reached.");
+    }
     var scopes = domain.ScopeSet{};
     if (input.body.read) scopes.insert(.read);
     if (input.body.issues_write) scopes.insert(.issues_write);
@@ -121,6 +129,12 @@ fn render(
         principal.user.id,
         &token_storage,
     ) catch return context.empty(.service_unavailable);
+    var event_storage: [50]models.AutomationEvent = undefined;
+    const events = database.listAutomationEvents(
+        allocator,
+        principal.user.id,
+        &event_storage,
+    ) catch return context.empty(.service_unavailable);
     const csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
 
@@ -140,6 +154,7 @@ fn render(
         principal.user.role,
         csrf_token.hiddenInput(),
     ) catch return context.empty(.internal_server_error);
+    renderAuditEvents(&writer, events) catch return context.empty(.internal_server_error);
     renderSetup(&writer, settings.public_url) catch
         return context.empty(.internal_server_error);
     page.end(&writer) catch return context.empty(.internal_server_error);
@@ -223,4 +238,31 @@ fn renderSetup(writer: *std.Io.Writer, public_url: []const u8) !void {
     try writer.writeAll("<section class=\"developer-card\"><h2>Remote MCP setup</h2><p>Use Streamable HTTP with a custom authorization header.</p><pre><code>{\n  \"mcpServers\": {\n    \"poof\": {\n      \"url\": \"");
     try highlight.escapeHtml(writer, public_url);
     try writer.writeAll("/mcp\",\n      \"headers\": {\n        \"Authorization\": \"Bearer YOUR_TOKEN\"\n      }\n    }\n  }\n}</code></pre></section>");
+}
+
+fn renderAuditEvents(
+    writer: *std.Io.Writer,
+    events: []const models.AutomationEvent,
+) !void {
+    try writer.writeAll("<section class=\"developer-card\"><h2>Recent automation</h2>");
+    if (events.len == 0) {
+        try writer.writeAll("<p class=\"notice\">No MCP activity yet.</p>");
+    } else {
+        try writer.writeAll("<div class=\"audit-list\">");
+        for (events) |event| {
+            try writer.writeAll("<article><div><strong>");
+            try highlight.escapeHtml(writer, event.tool_name orelse event.method);
+            try writer.writeAll("</strong><span>");
+            try highlight.escapeHtml(writer, event.outcome);
+            try writer.writeAll("</span></div>");
+            if (event.summary.len != 0) {
+                try writer.writeAll("<p>");
+                try highlight.escapeHtml(writer, event.summary);
+                try writer.writeAll("</p>");
+            }
+            try writer.writeAll("</article>");
+        }
+        try writer.writeAll("</div>");
+    }
+    try writer.writeAll("</section>");
 }

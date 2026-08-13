@@ -171,5 +171,8 @@ fn applicationModule(
     module.addAnonymousImport("migration_002", .{
         .root_source_file = b.path("migrations/002_seed_default_board.sql"),
     });
+    module.addAnonymousImport("migration_003", .{
+        .root_source_file = b.path("migrations/003_action_rate_limits.sql"),
+    });
     return module;
 }

@@ -90,9 +90,18 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         "/admin/issues/:id",
         admin_handlers.IssueUpdateDefinition.handle(admin_handlers.updateIssue),
     ),
+    ploof.get("/admin/issues/:id/edit", admin_handlers.editIssuePage),
+    ploof.post(
+        "/admin/issues/:id/content",
+        admin_handlers.IssueContentDefinition.handle(admin_handlers.editIssueContent),
+    ),
     ploof.post(
         "/admin/boards",
         admin_handlers.BoardCreateDefinition.handle(admin_handlers.createBoard),
+    ),
+    ploof.post(
+        "/admin/boards/:id",
+        admin_handlers.BoardUpdateDefinition.handle(admin_handlers.updateBoard),
     ),
     ploof.post(
         "/admin/boards/:id/archive",
@@ -105,6 +114,11 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
     ploof.post(
         "/admin/changelog/:id/publish",
         admin_handlers.ChangelogPublishDefinition.handle(admin_handlers.publishChangelog),
+    ),
+    ploof.get("/admin/changelog/:id/edit", admin_handlers.editChangelogPage),
+    ploof.post(
+        "/admin/changelog/:id/content",
+        admin_handlers.ChangelogCreateDefinition.handle(admin_handlers.updateChangelog),
     ),
     ploof.get(
         "/auth/discord",

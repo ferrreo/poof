@@ -45,6 +45,14 @@ pub const ApiPrincipal = struct {
     owner: User,
 };
 
+pub const AutomationEvent = struct {
+    method: []const u8,
+    tool_name: ?[]const u8,
+    outcome: []const u8,
+    summary: []const u8,
+    created_at_us: i64,
+};
+
 pub const Board = struct {
     id: i64,
     slug: []const u8,
@@ -137,6 +145,7 @@ pub const Changelog = struct {
     summary: []const u8,
     body_markdown: []const u8,
     version: ?[]const u8,
+    tags_csv: []const u8,
     published_at_us: ?i64,
 };
 
@@ -156,6 +165,16 @@ pub const AdminIssueUpdate = struct {
     pinned: bool,
     locked: bool,
     duplicate_of_id: ?i64 = null,
+};
+
+pub const IssueContentUpdate = struct {
+    title: []const u8,
+    body_markdown: []const u8,
+    reproduction_steps: ?[]const u8 = null,
+    expected_behavior: ?[]const u8 = null,
+    actual_behavior: ?[]const u8 = null,
+    environment: ?[]const u8 = null,
+    evidence_url: ?[]const u8 = null,
 };
 
 pub const Error = error{

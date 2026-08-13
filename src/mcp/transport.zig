@@ -418,6 +418,38 @@ fn callTool(
         try writer.print(",\"structuredContent\":{{\"board_id\":{d}}}}}", .{board_id});
         return;
     }
+    if (std.mem.eql(u8, name, "poof_archive_board")) {
+        try requireFields(arguments, &.{ "idempotency_key", "board_id", "confirm" });
+        _ = try idempotencyKey(arguments);
+        if (protocol.boolean(arguments, "confirm") != true) {
+            return error.ConfirmationRequired;
+        }
+        try database.archiveBoard(try positiveId(arguments, "board_id"));
+        try protocol.writeToolText(writer, "Board archived.");
+        try writer.writeAll("}");
+        return;
+    }
+    if (std.mem.eql(u8, name, "poof_update_board")) {
+        try requireFields(arguments, &.{
+            "idempotency_key", "board_id", "name",       "slug",
+            "description",     "color",    "sort_order",
+        });
+        _ = try idempotencyKey(arguments);
+        const sort_order = protocol.integer(arguments, "sort_order") orelse
+            return error.InvalidArguments;
+        if (sort_order < 0 or sort_order > 10_000) return error.InvalidArguments;
+        try database.updateBoard(
+            try positiveId(arguments, "board_id"),
+            protocol.string(arguments, "name") orelse return error.InvalidArguments,
+            protocol.string(arguments, "slug") orelse return error.InvalidArguments,
+            protocol.string(arguments, "description") orelse "",
+            protocol.string(arguments, "color") orelse "violet",
+            @intCast(sort_order),
+        );
+        try protocol.writeToolText(writer, "Board updated.");
+        try writer.writeAll("}");
+        return;
+    }
     if (std.mem.eql(u8, name, "poof_create_changelog")) {
         try requireFields(arguments, &.{
             "idempotency_key", "title", "slug", "summary", "body", "version", "issue_ids",
@@ -455,6 +487,29 @@ fn callTool(
             writer,
             if (published) "Changelog published." else "Changelog reverted to draft.",
         );
+        try writer.writeAll("}");
+        return;
+    }
+    if (std.mem.eql(u8, name, "poof_update_changelog")) {
+        try requireFields(arguments, &.{
+            "idempotency_key", "changelog_id", "title",     "slug", "summary",
+            "body",            "version",      "issue_ids",
+        });
+        _ = try idempotencyKey(arguments);
+        const changelog_id = try positiveId(arguments, "changelog_id");
+        try database.updateChangelog(changelog_id, .{
+            .title = protocol.string(arguments, "title") orelse return error.InvalidArguments,
+            .slug = protocol.string(arguments, "slug") orelse return error.InvalidArguments,
+            .summary = protocol.string(arguments, "summary") orelse
+                return error.InvalidArguments,
+            .body_markdown = protocol.string(arguments, "body") orelse
+                return error.InvalidArguments,
+            .version = protocol.string(arguments, "version"),
+        });
+        var linked_storage: [100]i64 = undefined;
+        const linked = try parseIdArray(arguments, "issue_ids", &linked_storage);
+        try database.setChangelogIssues(changelog_id, linked);
+        try protocol.writeToolText(writer, "Changelog updated.");
         try writer.writeAll("}");
         return;
     }

@@ -19,6 +19,11 @@ const migrations = [_]Migration{
         .name = "seed_default_board",
         .sql = @embedFile("migration_002"),
     },
+    .{
+        .version = 3,
+        .name = "action_rate_limits",
+        .sql = @embedFile("migration_003"),
+    },
 };
 
 const advisory_lock_id: i64 = 0x506f6f664d696772;
