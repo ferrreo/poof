@@ -69,11 +69,14 @@ pub const IssueSummary = struct {
     id: i64,
     slug: []const u8,
     board_name: []const u8,
+    board_id: i64,
     author_name: []const u8,
     kind: domain.IssueKind,
     status: domain.IssueStatus,
+    priority: domain.Priority,
     title: []const u8,
     pinned: bool,
+    locked: bool,
     vote_count: i64,
     comment_count: i64,
     created_at_us: i64,
@@ -118,6 +121,24 @@ pub const Changelog = struct {
     body_markdown: []const u8,
     version: ?[]const u8,
     published_at_us: ?i64,
+};
+
+pub const ChangelogInput = struct {
+    title: []const u8,
+    slug: []const u8,
+    summary: []const u8,
+    body_markdown: []const u8,
+    version: ?[]const u8 = null,
+    tags: []const []const u8 = &.{},
+};
+
+pub const AdminIssueUpdate = struct {
+    status: domain.IssueStatus,
+    priority: domain.Priority,
+    board_id: i64,
+    pinned: bool,
+    locked: bool,
+    duplicate_of_id: ?i64 = null,
 };
 
 pub const Error = error{

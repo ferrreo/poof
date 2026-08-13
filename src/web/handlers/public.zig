@@ -145,6 +145,9 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
         error.NotFound => renderNotFound(context),
         else => context.empty(.service_unavailable),
     };
+    var comment_storage: [100]models.Comment = undefined;
+    const comments = database.listComments(allocator, issue_id, &comment_storage) catch
+        return context.empty(.service_unavailable);
 
     const requested_slug = context.request.param("slug") orelse "";
     if (!std.mem.eql(u8, requested_slug, issue.slug)) {
@@ -189,6 +192,7 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
         return context.empty(.internal_server_error);
     renderDiscussion(
         &writer,
+        comments,
         if (csrf_token) |*token| token.hiddenInput() else null,
         issue.locked,
     ) catch
@@ -376,9 +380,18 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
 pub fn changelog(context: *app_state.Context) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.textStatic(.service_unavailable, "Poof is not configured");
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
     var workspace = request.Workspace.init(context) catch
         return context.empty(.service_unavailable);
-    const current = request.principal(context, workspace.allocator()) catch null;
+    const allocator = workspace.allocator();
+    const current = request.principal(context, allocator) catch null;
+    var changelog_storage: [100]models.Changelog = undefined;
+    const entries = database.listChangelogs(
+        allocator,
+        true,
+        &changelog_storage,
+    ) catch return context.empty(.service_unavailable);
     var writer = workspace.writer();
     page.begin(
         &writer,
@@ -391,8 +404,61 @@ pub fn changelog(context: *app_state.Context) app_state.Context.ResponseType {
         return context.empty(.internal_server_error);
     writer.writeAll("<h1>Freshly shipped.</h1><p>Product updates will appear here as they are published.</p></section>") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"empty-card\"><h2>No releases yet.</h2><p>The first changelog is being written.</p></section>") catch
+    if (entries.len == 0) {
+        writer.writeAll("<section class=\"empty-card\"><h2>No releases yet.</h2><p>The first changelog is being written.</p></section>") catch
+            return context.empty(.internal_server_error);
+    } else {
+        writer.writeAll("<section class=\"changelog-list\">") catch
+            return context.empty(.internal_server_error);
+        for (entries) |entry| renderChangelogCard(&writer, entry) catch
+            return context.empty(.internal_server_error);
+        writer.writeAll("</section>") catch return context.empty(.internal_server_error);
+    }
+    page.end(&writer) catch return context.empty(.internal_server_error);
+    return context.htmlBorrowed(.ok, workspace.rendered(&writer));
+}
+
+pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse
+        return context.textStatic(.service_unavailable, "Poof is not configured");
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    const slug = context.request.param("slug") orelse return context.empty(.not_found);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    const allocator = workspace.allocator();
+    const current = request.principal(context, allocator) catch null;
+    const entry = database.getChangelogBySlug(allocator, slug, true) catch |problem| return switch (problem) {
+        error.NotFound => context.empty(.not_found),
+        else => context.empty(.service_unavailable),
+    };
+    var writer = workspace.writer();
+    page.begin(
+        &writer,
+        settings,
+        entry.title,
+        .changelog,
+        if (current) |*value| &value.user else null,
+    ) catch return context.empty(.internal_server_error);
+    writer.writeAll("<article class=\"changelog-detail\"><header><p class=\"kicker\">") catch
         return context.empty(.internal_server_error);
+    if (entry.version) |version| {
+        highlight.escapeHtml(&writer, version) catch return context.empty(.internal_server_error);
+    } else {
+        writer.writeAll("Product update") catch return context.empty(.internal_server_error);
+    }
+    writer.writeAll("</p><h1>") catch return context.empty(.internal_server_error);
+    highlight.escapeHtml(&writer, entry.title) catch return context.empty(.internal_server_error);
+    writer.writeAll("</h1><p>") catch return context.empty(.internal_server_error);
+    highlight.escapeHtml(&writer, entry.summary) catch return context.empty(.internal_server_error);
+    writer.writeAll("</p><span>Published by ") catch return context.empty(.internal_server_error);
+    highlight.escapeHtml(&writer, entry.author_name) catch
+        return context.empty(.internal_server_error);
+    writer.writeAll("</span></header><div class=\"card markdown\">") catch
+        return context.empty(.internal_server_error);
+    markdown.render(&writer, entry.body_markdown) catch
+        return context.empty(.internal_server_error);
+    writer.writeAll("</div></article>") catch return context.empty(.internal_server_error);
     page.end(&writer) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
@@ -404,6 +470,24 @@ fn renderHero(writer: *std.Io.Writer, settings: *const @import("../../config.zig
     try writer.writeAll("</p><div class=\"hero-actions\">");
     try writer.writeAll("<a class=\"button button-primary\" href=\"/issues/new\">Share feedback →</a>");
     try writer.writeAll("<a class=\"button button-quiet\" href=\"/roadmap\">Explore the roadmap</a></div></section>");
+}
+
+fn renderChangelogCard(writer: *std.Io.Writer, entry: models.Changelog) !void {
+    try writer.writeAll("<article class=\"changelog-card\"><div><p class=\"kicker\">");
+    if (entry.version) |version| {
+        try highlight.escapeHtml(writer, version);
+    } else {
+        try writer.writeAll("Product update");
+    }
+    try writer.writeAll("</p><h2><a href=\"/changelog/");
+    try highlight.escapeHtml(writer, entry.slug);
+    try writer.writeAll("\">");
+    try highlight.escapeHtml(writer, entry.title);
+    try writer.writeAll("</a></h2><p>");
+    try highlight.escapeHtml(writer, entry.summary);
+    try writer.writeAll("</p></div><span>by ");
+    try highlight.escapeHtml(writer, entry.author_name);
+    try writer.writeAll("</span></article>");
 }
 
 fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: ListQuery) !void {
@@ -487,10 +571,23 @@ fn renderDiagnostics(writer: *std.Io.Writer, issue: models.Issue) !void {
 
 fn renderDiscussion(
     writer: *std.Io.Writer,
+    comments: []const models.Comment,
     csrf_input: ?[]const u8,
     locked: bool,
 ) !void {
     try writer.writeAll("<section class=\"discussion\" id=\"discussion\"><h2>Discussion</h2>");
+    if (comments.len != 0) {
+        try writer.writeAll("<div class=\"comment-list\">");
+        for (comments) |comment_value| {
+            if (comment_value.parent_id != null) continue;
+            try renderComment(writer, comment_value, false);
+            for (comments) |reply| {
+                if (reply.parent_id != comment_value.id) continue;
+                try renderComment(writer, reply, true);
+            }
+        }
+        try writer.writeAll("</div>");
+    }
     if (locked) {
         try writer.writeAll("<p class=\"notice\">This discussion is locked.</p></section>");
         return;
@@ -504,6 +601,17 @@ fn renderDiscussion(
     try writer.writeAll("<label for=\"comment-body\">Add to the conversation</label>");
     try writer.writeAll("<textarea id=\"comment-body\" name=\"body\" required maxlength=\"4096\" rows=\"5\"></textarea>");
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Post comment</button></form></section>");
+}
+
+fn renderComment(writer: *std.Io.Writer, comment_value: models.Comment, reply: bool) !void {
+    try writer.print(
+        "<article class=\"comment{s}\" id=\"comment-{d}\"><header><strong>",
+        .{ if (reply) " comment-reply" else "", comment_value.id },
+    );
+    try highlight.escapeHtml(writer, comment_value.author_name);
+    try writer.writeAll("</strong></header><div class=\"markdown\">");
+    try markdown.render(writer, comment_value.body_markdown);
+    try writer.writeAll("</div></article>");
 }
 
 fn renderVoteForm(

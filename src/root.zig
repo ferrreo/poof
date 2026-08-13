@@ -1,5 +1,6 @@
 const ploof = @import("ploof");
 const app_state_module = @import("app_state.zig");
+const admin_handlers = @import("web/handlers/admin.zig");
 const auth_handlers = @import("web/handlers/auth.zig");
 const public_handlers = @import("web/handlers/public.zig");
 const csrf_module = @import("web/csrf.zig");
@@ -78,6 +79,28 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
     ),
     ploof.get("/roadmap", public_handlers.roadmap),
     ploof.get("/changelog", public_handlers.changelog),
+    ploof.get("/changelog/:slug", public_handlers.changelogDetail),
+    ploof.get("/admin", admin_handlers.dashboard),
+    ploof.post(
+        "/admin/issues/:id",
+        admin_handlers.IssueUpdateDefinition.handle(admin_handlers.updateIssue),
+    ),
+    ploof.post(
+        "/admin/boards",
+        admin_handlers.BoardCreateDefinition.handle(admin_handlers.createBoard),
+    ),
+    ploof.post(
+        "/admin/boards/:id/archive",
+        admin_handlers.BoardArchiveDefinition.handle(admin_handlers.archiveBoard),
+    ),
+    ploof.post(
+        "/admin/changelog",
+        admin_handlers.ChangelogCreateDefinition.handle(admin_handlers.createChangelog),
+    ),
+    ploof.post(
+        "/admin/changelog/:id/publish",
+        admin_handlers.ChangelogPublishDefinition.handle(admin_handlers.publishChangelog),
+    ),
     ploof.get(
         "/auth/discord",
         auth_handlers.StartDefinition.handle(auth_handlers.start),
@@ -143,6 +166,7 @@ test {
     _ = page;
     _ = web_request;
     _ = auth_handlers;
+    _ = admin_handlers;
     _ = public_handlers;
     _ = csrf_module;
     _ = web_middleware;

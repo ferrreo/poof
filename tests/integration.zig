@@ -114,10 +114,30 @@ test "PostgreSQL migrations and feedback lifecycle" {
         "This would also make upgrades safer.",
     );
     try std.testing.expect(comment_id > 0);
+    var comment_storage: [8]poof.store.Comment = undefined;
+    const comments = try database.listComments(
+        arena,
+        issue_id,
+        &comment_storage,
+    );
+    try std.testing.expectEqual(@as(usize, 1), comments.len);
+    try std.testing.expectEqualStrings(
+        "This would also make upgrades safer.",
+        comments[0].body_markdown,
+    );
 
-    try database.updateIssueStatus(issue_id, admin.id, .completed);
+    try database.adminUpdateIssue(issue_id, admin.id, .{
+        .status = .completed,
+        .priority = .high,
+        .board_id = boards[0].id,
+        .pinned = true,
+        .locked = true,
+    });
     const completed = try database.getIssue(arena, issue_id);
     try std.testing.expectEqual(poof.domain.IssueStatus.completed, completed.status);
+    try std.testing.expectEqual(poof.domain.Priority.high, completed.priority);
+    try std.testing.expect(completed.pinned);
+    try std.testing.expect(completed.locked);
     try std.testing.expectEqual(@as(i64, 2), completed.vote_count);
     try std.testing.expectEqual(@as(i64, 1), completed.comment_count);
 
@@ -130,6 +150,39 @@ test "PostgreSQL migrations and feedback lifecycle" {
     try std.testing.expectEqual(@as(i64, 1), listed.total);
     try std.testing.expectEqual(@as(usize, 1), listed.items.len);
     try std.testing.expectEqual(issue_id, listed.items[0].id);
+
+    const board_id = try database.createBoard(
+        "Integrations",
+        "integrations",
+        "Requests for connected tools.",
+        "blue",
+    );
+    try database.archiveBoard(board_id);
+
+    const changelog_id = try database.createChangelog(admin.id, .{
+        .slug = "portable-exports",
+        .title = "Portable exports are here",
+        .summary = "Download a complete copy of your feedback.",
+        .body_markdown = "Use the new **Export** action to download JSON.",
+        .version = "0.1.0",
+        .tags = &.{"new-feature"},
+    });
+    var changelog_storage: [8]poof.store.Changelog = undefined;
+    const drafts = try database.listChangelogs(
+        arena,
+        false,
+        &changelog_storage,
+    );
+    try std.testing.expectEqual(@as(usize, 1), drafts.len);
+    try std.testing.expect(drafts[0].published_at_us == null);
+    try database.publishChangelog(changelog_id, true);
+    const published = try database.getChangelogBySlug(
+        arena,
+        "portable-exports",
+        true,
+    );
+    try std.testing.expectEqualStrings("0.1.0", published.version.?);
+    try std.testing.expect(published.published_at_us != null);
 }
 
 test "Ploof public routes render persisted feedback" {

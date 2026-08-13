@@ -378,6 +378,292 @@ pub const Postgres = struct {
             return error.DatabaseUnavailable;
         connection.commit() catch return error.DatabaseUnavailable;
     }
+
+    pub fn listComments(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        issue_id: i64,
+        output: []models.Comment,
+    ) models.Error![]models.Comment {
+        var result = self.pool.query(
+            \\SELECT c.id, c.issue_id, c.author_id,
+            \\       COALESCE(u.display_name, u.username), c.parent_id,
+            \\       c.body_markdown, c.created_at
+            \\FROM comments c
+            \\JOIN users u ON u.id = c.author_id
+            \\WHERE c.issue_id = $1 AND c.deleted_at IS NULL
+            \\ORDER BY c.created_at, c.id
+        , .{issue_id}) catch return error.DatabaseUnavailable;
+        defer result.deinit();
+        var used: usize = 0;
+        while (result.next() catch return error.DatabaseUnavailable) |row| {
+            if (used == output.len) return error.CapacityExceeded;
+            output[used] = .{
+                .id = row.get(i64, 0) catch return error.InvalidDatabaseData,
+                .issue_id = row.get(i64, 1) catch return error.InvalidDatabaseData,
+                .author_id = row.get(i64, 2) catch return error.InvalidDatabaseData,
+                .author_name = try copyColumn(row, allocator, 3),
+                .parent_id = row.get(?i64, 4) catch return error.InvalidDatabaseData,
+                .body_markdown = try copyColumn(row, allocator, 5),
+                .created_at_us = row.get(i64, 6) catch return error.InvalidDatabaseData,
+            };
+            used += 1;
+        }
+        return output[0..used];
+    }
+
+    pub fn adminUpdateIssue(
+        self: *Postgres,
+        issue_id: i64,
+        actor_id: i64,
+        update: models.AdminIssueUpdate,
+    ) models.Error!void {
+        if (update.board_id <= 0 or update.duplicate_of_id == issue_id) return error.Conflict;
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+
+        var previous = (connection.row(
+            \\SELECT status, priority, board_id, pinned, locked, duplicate_of_id
+            \\FROM issues WHERE id = $1 FOR UPDATE
+        , .{issue_id}) catch return error.DatabaseUnavailable) orelse return error.NotFound;
+        const old_status = previous.get([]const u8, 0) catch return error.InvalidDatabaseData;
+        const old_priority = previous.get([]const u8, 1) catch return error.InvalidDatabaseData;
+        const old_board = previous.get(i64, 2) catch return error.InvalidDatabaseData;
+        const old_pinned = previous.get(bool, 3) catch return error.InvalidDatabaseData;
+        const old_locked = previous.get(bool, 4) catch return error.InvalidDatabaseData;
+        const old_duplicate = previous.get(?i64, 5) catch return error.InvalidDatabaseData;
+        var old_status_copy: [16]u8 = undefined;
+        var old_priority_copy: [16]u8 = undefined;
+        if (old_status.len > old_status_copy.len or old_priority.len > old_priority_copy.len) {
+            return error.InvalidDatabaseData;
+        }
+        @memcpy(old_status_copy[0..old_status.len], old_status);
+        @memcpy(old_priority_copy[0..old_priority.len], old_priority);
+        previous.deinit() catch return error.DatabaseUnavailable;
+
+        const affected = connection.exec(
+            \\UPDATE issues SET
+            \\    status = $2, priority = $3, board_id = $4,
+            \\    pinned = $5, locked = $6, duplicate_of_id = $7,
+            \\    completed_at = CASE
+            \\        WHEN $2 = 'completed' THEN COALESCE(completed_at, now())
+            \\        ELSE NULL
+            \\    END,
+            \\    closed_at = CASE
+            \\        WHEN $2 = 'closed' THEN COALESCE(closed_at, now())
+            \\        ELSE NULL
+            \\    END
+            \\WHERE id = $1
+        , .{
+            issue_id,
+            @tagName(update.status),
+            @tagName(update.priority),
+            update.board_id,
+            update.pinned,
+            update.locked,
+            update.duplicate_of_id,
+        }) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+
+        if (!std.mem.eql(u8, old_status_copy[0..old_status.len], @tagName(update.status))) {
+            try insertEvent(
+                connection,
+                issue_id,
+                actor_id,
+                "status_changed",
+                old_status_copy[0..old_status.len],
+                @tagName(update.status),
+            );
+        }
+        if (!std.mem.eql(u8, old_priority_copy[0..old_priority.len], @tagName(update.priority))) {
+            try insertEvent(
+                connection,
+                issue_id,
+                actor_id,
+                "priority_changed",
+                old_priority_copy[0..old_priority.len],
+                @tagName(update.priority),
+            );
+        }
+        if (old_board != update.board_id) {
+            try insertIntegerEvent(
+                connection,
+                issue_id,
+                actor_id,
+                "board_changed",
+                old_board,
+                update.board_id,
+            );
+        }
+        if (old_pinned != update.pinned) {
+            try insertEvent(
+                connection,
+                issue_id,
+                actor_id,
+                if (update.pinned) "pinned" else "unpinned",
+                null,
+                null,
+            );
+        }
+        if (old_locked != update.locked) {
+            try insertEvent(
+                connection,
+                issue_id,
+                actor_id,
+                if (update.locked) "locked" else "unlocked",
+                null,
+                null,
+            );
+        }
+        if (old_duplicate != update.duplicate_of_id) {
+            try insertEvent(
+                connection,
+                issue_id,
+                actor_id,
+                if (update.duplicate_of_id == null)
+                    "duplicate_cleared"
+                else
+                    "duplicate_marked",
+                null,
+                null,
+            );
+        }
+        connection.commit() catch return error.DatabaseUnavailable;
+    }
+
+    pub fn createBoard(
+        self: *Postgres,
+        name: []const u8,
+        slug: []const u8,
+        description: []const u8,
+        color: []const u8,
+    ) models.Error!i64 {
+        if (name.len == 0 or name.len > 80 or slug.len == 0 or slug.len > 80 or
+            description.len > 500)
+        {
+            return error.Conflict;
+        }
+        var row = (self.pool.row(
+            \\INSERT INTO boards (name, slug, description, color, sort_order)
+            \\VALUES (
+            \\    $1, $2, $3, $4,
+            \\    COALESCE((SELECT max(sort_order) + 1 FROM boards), 0)
+            \\)
+            \\RETURNING id
+        , .{ name, slug, description, color }) catch
+            return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        defer row.deinit() catch {};
+        return row.get(i64, 0) catch error.InvalidDatabaseData;
+    }
+
+    pub fn archiveBoard(self: *Postgres, board_id: i64) models.Error!void {
+        const affected = self.pool.exec(
+            \\UPDATE boards SET archived_at = now()
+            \\WHERE id = $1
+            \\  AND archived_at IS NULL
+            \\  AND (SELECT count(*) FROM boards WHERE archived_at IS NULL) > 1
+        , .{board_id}) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.Conflict;
+    }
+
+    pub fn createChangelog(
+        self: *Postgres,
+        author_id: i64,
+        input: models.ChangelogInput,
+    ) models.Error!i64 {
+        if (!validChangelog(input)) return error.Conflict;
+        var row = (self.pool.row(
+            \\INSERT INTO changelog_entries (
+            \\    author_id, slug, title, summary, body_markdown, version, tags
+            \\) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            \\RETURNING id
+        , .{
+            author_id,
+            input.slug,
+            input.title,
+            input.summary,
+            input.body_markdown,
+            input.version,
+            input.tags,
+        }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        defer row.deinit() catch {};
+        return row.get(i64, 0) catch error.InvalidDatabaseData;
+    }
+
+    pub fn updateChangelog(
+        self: *Postgres,
+        changelog_id: i64,
+        input: models.ChangelogInput,
+    ) models.Error!void {
+        if (!validChangelog(input)) return error.Conflict;
+        const affected = self.pool.exec(
+            \\UPDATE changelog_entries SET
+            \\    slug = $2, title = $3, summary = $4, body_markdown = $5,
+            \\    version = $6, tags = $7
+            \\WHERE id = $1
+        , .{
+            changelog_id,
+            input.slug,
+            input.title,
+            input.summary,
+            input.body_markdown,
+            input.version,
+            input.tags,
+        }) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+    }
+
+    pub fn publishChangelog(
+        self: *Postgres,
+        changelog_id: i64,
+        published: bool,
+    ) models.Error!void {
+        const affected = self.pool.exec(
+            \\UPDATE changelog_entries SET
+            \\    status = CASE WHEN $2 THEN 'published' ELSE 'draft' END,
+            \\    published_at = CASE WHEN $2 THEN COALESCE(published_at, now()) ELSE NULL END
+            \\WHERE id = $1
+        , .{ changelog_id, published }) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+    }
+
+    pub fn listChangelogs(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        published_only: bool,
+        output: []models.Changelog,
+    ) models.Error![]models.Changelog {
+        var result = self.pool.query(changelog_select ++
+            \\ WHERE (NOT $1 OR c.status = 'published')
+            \\ ORDER BY c.published_at DESC NULLS FIRST, c.updated_at DESC, c.id DESC
+            \\ LIMIT 100
+        , .{published_only}) catch return error.DatabaseUnavailable;
+        defer result.deinit();
+        var used: usize = 0;
+        while (result.next() catch return error.DatabaseUnavailable) |row| {
+            if (used == output.len) return error.CapacityExceeded;
+            output[used] = try readChangelog(row, allocator);
+            used += 1;
+        }
+        return output[0..used];
+    }
+
+    pub fn getChangelogBySlug(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        slug: []const u8,
+        published_only: bool,
+    ) models.Error!models.Changelog {
+        var row = (self.pool.row(
+            changelog_select ++
+                " WHERE c.slug = $1 AND (NOT $2 OR c.status = 'published')",
+            .{ slug, published_only },
+        ) catch return error.DatabaseUnavailable) orelse return error.NotFound;
+        defer row.deinit() catch {};
+        return readChangelogQuery(&row, allocator);
+    }
 };
 
 const issue_select =
@@ -409,8 +695,9 @@ const issue_filter =
 ;
 
 const issue_list_sql =
-    \\SELECT i.id, i.slug, b.name, COALESCE(u.display_name, u.username),
-    \\       i.kind, i.status, i.title, i.pinned,
+    \\SELECT i.id, i.slug, b.name, i.board_id,
+    \\       COALESCE(u.display_name, u.username),
+    \\       i.kind, i.status, i.priority, i.title, i.pinned, i.locked,
     \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
     \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
     \\       i.created_at
@@ -424,6 +711,13 @@ const issue_list_sql =
 ;
 
 const issue_count_sql = "SELECT count(*)" ++ issue_filter;
+
+const changelog_select =
+    \\SELECT c.id, c.slug, COALESCE(u.display_name, u.username),
+    \\       c.title, c.summary, c.body_markdown, c.version, c.published_at
+    \\FROM changelog_entries c
+    \\JOIN users u ON u.id = c.author_id
+;
 
 fn readUser(
     row: *pg.QueryRow,
@@ -504,16 +798,20 @@ fn readIssueSummary(
         .id = row.get(i64, 0) catch return error.InvalidDatabaseData,
         .slug = try copyColumn(row, allocator, 1),
         .board_name = try copyColumn(row, allocator, 2),
-        .author_name = try copyColumn(row, allocator, 3),
-        .kind = try models.parseKind(row.get([]const u8, 4) catch
+        .board_id = row.get(i64, 3) catch return error.InvalidDatabaseData,
+        .author_name = try copyColumn(row, allocator, 4),
+        .kind = try models.parseKind(row.get([]const u8, 5) catch
             return error.InvalidDatabaseData),
-        .status = try models.parseStatus(row.get([]const u8, 5) catch
+        .status = try models.parseStatus(row.get([]const u8, 6) catch
             return error.InvalidDatabaseData),
-        .title = try copyColumn(row, allocator, 6),
-        .pinned = row.get(bool, 7) catch return error.InvalidDatabaseData,
-        .vote_count = row.get(i64, 8) catch return error.InvalidDatabaseData,
-        .comment_count = row.get(i64, 9) catch return error.InvalidDatabaseData,
-        .created_at_us = row.get(i64, 10) catch return error.InvalidDatabaseData,
+        .priority = try models.parsePriority(row.get([]const u8, 7) catch
+            return error.InvalidDatabaseData),
+        .title = try copyColumn(row, allocator, 8),
+        .pinned = row.get(bool, 9) catch return error.InvalidDatabaseData,
+        .locked = row.get(bool, 10) catch return error.InvalidDatabaseData,
+        .vote_count = row.get(i64, 11) catch return error.InvalidDatabaseData,
+        .comment_count = row.get(i64, 12) catch return error.InvalidDatabaseData,
+        .created_at_us = row.get(i64, 13) catch return error.InvalidDatabaseData,
     };
 }
 
@@ -537,6 +835,100 @@ fn copyQueryColumn(
 
 fn copyOptionalQueryColumn(
     row: *pg.QueryRow,
+    allocator: std.mem.Allocator,
+    index: usize,
+) models.Error!?[]const u8 {
+    const value = row.get(?[]const u8, index) catch return error.InvalidDatabaseData;
+    return if (value) |bytes|
+        allocator.dupe(u8, bytes) catch error.CapacityExceeded
+    else
+        null;
+}
+
+fn insertEvent(
+    connection: *pg.Conn,
+    issue_id: i64,
+    actor_id: i64,
+    event_type: []const u8,
+    from_value: ?[]const u8,
+    to_value: ?[]const u8,
+) models.Error!void {
+    _ = connection.exec(
+        \\INSERT INTO issue_events (
+        \\    issue_id, actor_id, event_type, from_value, to_value
+        \\) VALUES ($1, $2, $3, $4, $5)
+    , .{ issue_id, actor_id, event_type, from_value, to_value }) catch
+        return error.DatabaseUnavailable;
+}
+
+fn insertIntegerEvent(
+    connection: *pg.Conn,
+    issue_id: i64,
+    actor_id: i64,
+    event_type: []const u8,
+    from_value: i64,
+    to_value: i64,
+) models.Error!void {
+    var from_storage: [24]u8 = undefined;
+    var to_storage: [24]u8 = undefined;
+    const from = std.fmt.bufPrint(&from_storage, "{d}", .{from_value}) catch
+        return error.InvalidDatabaseData;
+    const to = std.fmt.bufPrint(&to_storage, "{d}", .{to_value}) catch
+        return error.InvalidDatabaseData;
+    return insertEvent(connection, issue_id, actor_id, event_type, from, to);
+}
+
+fn validChangelog(input: models.ChangelogInput) bool {
+    if (std.mem.trim(u8, input.title, " \t\r\n").len < 3 or input.title.len > 160 or
+        std.mem.trim(u8, input.summary, " \t\r\n").len == 0 or input.summary.len > 500 or
+        std.mem.trim(u8, input.body_markdown, " \t\r\n").len == 0 or
+        input.body_markdown.len > 64 * 1024 or input.slug.len == 0 or input.slug.len > 180)
+    {
+        return false;
+    }
+    for (input.slug) |byte| {
+        if (!std.ascii.isLower(byte) and !std.ascii.isDigit(byte) and byte != '-') return false;
+    }
+    if (input.version) |version| if (version.len == 0 or version.len > 64) return false;
+    if (input.tags.len > 12) return false;
+    for (input.tags) |tag| if (tag.len == 0 or tag.len > 40) return false;
+    return true;
+}
+
+fn readChangelog(
+    row: pg.Row,
+    allocator: std.mem.Allocator,
+) models.Error!models.Changelog {
+    return .{
+        .id = row.get(i64, 0) catch return error.InvalidDatabaseData,
+        .slug = try copyColumn(row, allocator, 1),
+        .author_name = try copyColumn(row, allocator, 2),
+        .title = try copyColumn(row, allocator, 3),
+        .summary = try copyColumn(row, allocator, 4),
+        .body_markdown = try copyColumn(row, allocator, 5),
+        .version = try copyOptionalColumn(row, allocator, 6),
+        .published_at_us = row.get(?i64, 7) catch return error.InvalidDatabaseData,
+    };
+}
+
+fn readChangelogQuery(
+    row: *pg.QueryRow,
+    allocator: std.mem.Allocator,
+) models.Error!models.Changelog {
+    return .{
+        .id = row.get(i64, 0) catch return error.InvalidDatabaseData,
+        .slug = try copyQueryColumn(row, allocator, 1),
+        .author_name = try copyQueryColumn(row, allocator, 2),
+        .title = try copyQueryColumn(row, allocator, 3),
+        .summary = try copyQueryColumn(row, allocator, 4),
+        .body_markdown = try copyQueryColumn(row, allocator, 5),
+        .version = try copyOptionalQueryColumn(row, allocator, 6),
+        .published_at_us = row.get(?i64, 7) catch return error.InvalidDatabaseData,
+    };
+}
+
+fn copyOptionalColumn(
+    row: pg.Row,
     allocator: std.mem.Allocator,
     index: usize,
 ) models.Error!?[]const u8 {
