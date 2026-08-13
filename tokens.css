@@ -1,0 +1,80 @@
+:root {
+  --color-paper: oklch(92% 0.045 50);
+  --color-paper-2: oklch(89% 0.050 50);
+  --color-paper-3: oklch(84% 0.054 45);
+  --color-rule: oklch(68% 0.030 40);
+  --color-rule-2: oklch(35% 0.020 35);
+  --color-muted: oklch(46% 0.022 35);
+  --color-neutral: oklch(30% 0.025 30);
+  --color-ink-2: oklch(20% 0.030 28);
+  --color-ink: oklch(15% 0.030 25);
+  --color-accent: oklch(32% 0.10 28);
+  --color-accent-ink: oklch(45% 0.13 30);
+  --color-focus: oklch(48% 0.18 30);
+  --color-code-paper: oklch(18% 0.02 250);
+  --color-code-ink: oklch(90% 0.02 250);
+
+  --font-display: "Newsreader", "Source Serif 4", ui-serif, Georgia, serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --display-weight: 700;
+  --display-style: normal;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+  --text-display-s: clamp(2rem, 3vw + 1rem, 2.875rem);
+  --text-display: clamp(2rem, 3vw + 1rem, 2.875rem);
+
+  --tracking-display: -0.022em;
+  --tracking-tight: -0.008em;
+  --tracking-label: 0.08em;
+
+  --lh-display: 1.12;
+  --lh-normal: 1.55;
+  --lh-relaxed: 1.65;
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+
+  --measure: 65ch;
+  --page: min(72rem, calc(100% - var(--space-xl)));
+  --page-narrow: min(42rem, calc(100% - var(--space-xl)));
+
+  --radius-card: 0;
+  --radius-pill: 0;
+  --radius-input: 0;
+  --rule-card: 1px;
+  --rule-heavy: 2px;
+  --shadow-card: none;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sticky-nav: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  --control-height: 2.625rem;
+}

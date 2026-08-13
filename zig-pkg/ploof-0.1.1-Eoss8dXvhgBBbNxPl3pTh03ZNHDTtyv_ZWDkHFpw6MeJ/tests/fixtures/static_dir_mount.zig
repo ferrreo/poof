@@ -1,5 +1,0 @@
-const ploof = @import("ploof_compile").ploof;
-
-comptime {
-    _ = ploof.StaticDir.init("/assets/", ".", .{});
-}

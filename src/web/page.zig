@@ -27,10 +27,11 @@ pub fn begin(
     try writer.writeAll(" — ");
     try highlight.escapeHtml(writer, settings.company_name);
     try writer.writeAll("</title></head><body>");
-    try writer.writeAll("<header class=\"site-header\"><a class=\"brand\" href=\"/\">");
-    try writer.writeAll("<span class=\"brand-mark\" aria-hidden=\"true\">P</span><span>");
+    try writer.writeAll("<header class=\"site-header\">");
+    try writer.writeAll("<p class=\"masthead-kicker\">Open product ledger</p>");
+    try writer.writeAll("<a class=\"brand\" href=\"/\">");
     try highlight.escapeHtml(writer, settings.company_name);
-    try writer.writeAll("</span></a><nav aria-label=\"Primary navigation\">");
+    try writer.writeAll("</a><div class=\"masthead-bar\"><nav aria-label=\"Primary navigation\">");
     try navLink(writer, "/", "Feedback", active == .feedback);
     try navLink(writer, "/roadmap", "Roadmap", active == .roadmap);
     try navLink(writer, "/changelog", "Changelog", active == .changelog);
@@ -49,16 +50,13 @@ pub fn begin(
     } else {
         try writer.writeAll("<a class=\"button button-quiet\" href=\"/auth/discord\">Sign in</a>");
     }
-    try writer.writeAll("</header><main>");
+    try writer.writeAll("</div></header><main>");
 }
 
 pub fn end(writer: *std.Io.Writer) std.Io.Writer.Error!void {
-    try writer.print(
-        "</main><footer><span>Free, open source, and built with Zig.</span>" ++
-            "<span class=\"footer-dot\" aria-hidden=\"true\"></span>" ++
-            "<a href=\"/settings/developer/tokens\">Connect an agent with MCP</a>" ++
-            "</footer></body></html>",
-        .{},
+    try writer.writeAll(
+        "</main><footer><p class=\"colophon\">Free, open-source feedback software for one company. BSD-3-Clause. Zig, Ploof, zhl, PostgreSQL.</p>" ++
+            "<a href=\"/settings/developer/tokens\">MCP tokens</a></footer></body></html>",
     );
 }
 

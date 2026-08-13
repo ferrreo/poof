@@ -1,6 +1,0 @@
-{
-  "scopeName": "source.conditional",
-  "patterns": [
-    { "name": "keyword.control.test", "match": "(?(1)yes|no)" }
-  ]
-}

@@ -139,7 +139,7 @@ fn renderIssueList(
     page.begin(
         &writer,
         settings,
-        if (show_hero) "Shape what ships next" else "Feedback",
+        "Feedback",
         .feedback,
         if (current) |*value| &value.user else null,
     ) catch return context.empty(.internal_server_error);
@@ -431,13 +431,13 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
     var writer = workspace.writer();
     page.begin(&writer, settings, "My activity", .none, &current.user) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"profile-page\"><header><p class=\"kicker\">Your Poof profile</p><h1>") catch
+    writer.writeAll("<section class=\"profile-page\"><header><h1>") catch
         return context.empty(.internal_server_error);
     highlight.escapeHtml(
         &writer,
         current.user.display_name orelse current.user.username,
     ) catch return context.empty(.internal_server_error);
-    writer.writeAll("</h1><p>Submitted and supported feedback appears here.</p><div class=\"profile-actions\">") catch
+    writer.writeAll("</h1><p>Feedback you filed or voted on.</p><div class=\"profile-actions\">") catch
         return context.empty(.internal_server_error);
     writer.writeAll("<a class=\"button button-quiet\" href=\"/settings/developer/tokens\">Developer tokens</a>") catch
         return context.empty(.internal_server_error);
@@ -447,7 +447,7 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
     writer.writeAll("<button class=\"button button-quiet\" type=\"submit\">Sign out</button></form></div></header>") catch
         return context.empty(.internal_server_error);
     if (issues.len == 0) {
-        writer.writeAll("<div class=\"empty-card\"><h2>No activity yet.</h2><p>Submit or vote on feedback to see it here.</p></div>") catch
+        writer.writeAll("<div class=\"empty-card\"><h2>No activity yet.</h2><p>File or vote on an item to see it here.</p></div>") catch
             return context.empty(.internal_server_error);
     } else {
         writer.writeAll("<div class=\"issue-list\">") catch
@@ -498,9 +498,9 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
         .roadmap,
         if (current) |*value| &value.user else null,
     ) catch return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"page-heading\"><p class=\"kicker\">Public roadmap</p>") catch
+    writer.writeAll("<section class=\"page-heading\">") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>See what we’re building.</h1><p>Every item comes directly from community feedback.</p></section>") catch
+    writer.writeAll("<h1>Roadmap</h1><p>Planned, in progress, and recently completed. These columns query the issue tracker.</p></section>") catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"roadmap-grid\">") catch
         return context.empty(.internal_server_error);
@@ -544,12 +544,12 @@ pub fn changelog(
         .changelog,
         if (current) |*value| &value.user else null,
     ) catch return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"page-heading\"><p class=\"kicker\">Changelog</p>") catch
+    writer.writeAll("<section class=\"page-heading\">") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>Freshly shipped.</h1><p>Product updates will appear here as they are published.</p></section>") catch
+    writer.writeAll("<h1>Release notes</h1><p>Published updates, newest first.</p></section>") catch
         return context.empty(.internal_server_error);
     if (entries.len == 0) {
-        writer.writeAll("<section class=\"empty-card\"><h2>No releases yet.</h2><p>The first changelog is being written.</p></section>") catch
+        writer.writeAll("<section class=\"empty-card\"><h2>No releases yet.</h2><p>Drafts stay off this page until they are published.</p></section>") catch
             return context.empty(.internal_server_error);
     } else {
         writer.writeAll("<section class=\"changelog-list\">") catch
@@ -620,7 +620,7 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
         return context.empty(.internal_server_error);
     writer.writeAll("</div>") catch return context.empty(.internal_server_error);
     if (linked_issues.len != 0) {
-        writer.writeAll("<section class=\"built-from\"><p class=\"kicker\">Built from your feedback</p><div class=\"issue-list\">") catch
+        writer.writeAll("<section class=\"built-from\"><h2>Linked feedback</h2><div class=\"issue-list\">") catch
             return context.empty(.internal_server_error);
         for (linked_issues) |issue| renderIssueCard(&writer, issue) catch
             return context.empty(.internal_server_error);
@@ -633,12 +633,11 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
 }
 
 fn renderHero(writer: *std.Io.Writer, settings: *const @import("../../config.zig").Config) !void {
-    try writer.writeAll("<section class=\"hero\"><div class=\"eyebrow\"><span></span> Built in the open</div>");
-    try writer.writeAll("<h1>Help shape what<br><em>ships next.</em></h1><p>");
+    try writer.writeAll("<section class=\"hero\"><p class=\"lede\">");
     try highlight.escapeHtml(writer, settings.tagline);
     try writer.writeAll("</p><div class=\"hero-actions\">");
-    try writer.writeAll("<a class=\"button button-primary\" href=\"/issues/new\">Share feedback →</a>");
-    try writer.writeAll("<a class=\"button button-quiet\" href=\"/roadmap\">Explore the roadmap</a></div></section>");
+    try writer.writeAll("<a class=\"button button-primary\" href=\"/issues/new\">New feedback</a>");
+    try writer.writeAll("<a class=\"button button-quiet\" href=\"/roadmap\">Roadmap</a></div></section>");
 }
 
 fn renderChangelogCard(writer: *std.Io.Writer, entry: models.Changelog) !void {
@@ -660,8 +659,8 @@ fn renderChangelogCard(writer: *std.Io.Writer, entry: models.Changelog) !void {
 }
 
 fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: ListQuery) !void {
-    try writer.writeAll("<section class=\"feedback-shell\"><div class=\"section-heading\"><div>");
-    try writer.writeAll("<p class=\"kicker\">Community board</p><h2>What should we build?</h2></div>");
+    try writer.writeAll("<section class=\"feedback-shell\"><div class=\"section-heading\">");
+    try writer.writeAll("<h2>Feedback</h2>");
     try writer.writeAll("<form class=\"filters\" method=\"get\" action=\"/issues\">");
     try writer.writeAll("<label><span class=\"sr-only\">Search</span><input type=\"search\" name=\"q\" placeholder=\"Search feedback\"");
     if (query.q) |value| {
@@ -706,9 +705,9 @@ fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: Li
 
 fn renderIssueCards(writer: *std.Io.Writer, items: []const models.IssueSummary, total: i64) !void {
     if (items.len == 0) {
-        try writer.writeAll("<div class=\"empty-card\"><h3>The board is ready for its first idea.</h3>");
-        try writer.writeAll("<p>Sign in with Discord and tell us what would make this product better.</p>");
-        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">Start the conversation →</a></div>");
+        try writer.writeAll("<div class=\"empty-card\"><h3>No feedback yet.</h3>");
+        try writer.writeAll("<p>Sign in with Discord to file the first item.</p>");
+        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">New feedback</a></div>");
         return;
     }
     try writer.print("<div class=\"issue-list\" data-total=\"{d}\">", .{total});
@@ -902,8 +901,8 @@ fn renderIssueForm(
     boards: []const models.Board,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"form-page\"><div><p class=\"kicker\">Share feedback</p>");
-    try writer.writeAll("<h1>What would make this better?</h1><p>Give enough context for the community to understand and reproduce it.</p></div>");
+    try writer.writeAll("<section class=\"form-page\"><div>");
+    try writer.writeAll("<h1>New feedback</h1><p>Give enough context for someone else to understand and, for bugs, reproduce it.</p></div>");
     try writer.writeAll("<form class=\"stacked-form\" method=\"post\" action=\"/issues\">");
     try writer.writeAll(csrf_input);
     try writer.writeAll("<div class=\"form-row\"><label>Type<select name=\"kind\" data-kind-select>");

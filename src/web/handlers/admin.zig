@@ -135,9 +135,9 @@ pub fn dashboard(
     var writer = workspace.writer();
     page.begin(&writer, settings, "Admin", .admin, &principal.user) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"admin-shell\"><header class=\"admin-heading\"><div><p class=\"kicker\">Single-company admin</p>") catch
+    writer.writeAll("<section class=\"admin-shell\"><header class=\"admin-heading\"><div>") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>Keep feedback moving.</h1><p>Triage the backlog, shape the roadmap, and publish what shipped.</p></div>") catch
+    writer.writeAll("<h1>Triage</h1><p>Status, priority, boards, and release notes for this company.</p></div>") catch
         return context.empty(.internal_server_error);
     writer.print("<div class=\"admin-stat\"><strong>{d}</strong><span>feedback items</span></div></header>", .{issues.total}) catch
         return context.empty(.internal_server_error);
@@ -459,7 +459,7 @@ fn renderIssues(
     csrf_input: []const u8,
     query: DashboardQuery,
 ) !void {
-    try writer.writeAll("<section class=\"admin-section\" id=\"issues\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Triage</p><h2>Feedback backlog</h2></div></div>");
+    try writer.writeAll("<section class=\"admin-section\" id=\"issues\"><div class=\"admin-section-heading\"><h2>Feedback backlog</h2></div>");
     try writer.writeAll("<form class=\"admin-filters\" method=\"get\" action=\"/admin\"><input type=\"search\" name=\"q\" placeholder=\"Search feedback\" value=\"");
     if (query.q) |value| try highlight.escapeHtml(writer, value);
     try writer.writeAll("\"><select name=\"status\"><option value=\"all\">All statuses</option>");
@@ -536,7 +536,7 @@ fn renderBoards(
     boards: []const models.Board,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"admin-section\" id=\"boards\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Organization</p><h2>Boards</h2></div></div><div class=\"board-admin-grid\">");
+    try writer.writeAll("<section class=\"admin-section\" id=\"boards\"><div class=\"admin-section-heading\"><h2>Boards</h2></div><div class=\"board-admin-grid\">");
     for (boards) |board| {
         try writer.writeAll("<article class=\"admin-card\"><div><strong>");
         try highlight.escapeHtml(writer, board.name);
@@ -576,7 +576,7 @@ fn tryRenderIssueContentForm(
     issue: models.Issue,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"form-page\"><div><p class=\"kicker\">Admin editor</p><h1>Edit feedback.</h1><p>Changes are recorded in the issue activity history.</p></div>");
+    try writer.writeAll("<section class=\"form-page\"><div><h1>Edit feedback</h1><p>Changes are recorded in the issue activity history.</p></div>");
     try writer.print("<form class=\"stacked-form\" method=\"post\" action=\"/admin/issues/{d}/content\">", .{issue.id});
     try writer.writeAll(csrf_input);
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" value=\"");
@@ -610,7 +610,7 @@ fn renderChangelogs(
     current_page: u16,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"admin-section\" id=\"changelog\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Releases</p><h2>Changelog</h2></div></div>");
+    try writer.writeAll("<section class=\"admin-section\" id=\"changelog\"><div class=\"admin-section-heading\"><h2>Changelog</h2></div>");
     if (entries.len != 0) {
         try writer.writeAll("<div class=\"board-admin-grid\">");
         for (entries) |entry| {
@@ -657,7 +657,7 @@ fn renderChangelogEditForm(
     linked: []const models.IssueSummary,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"form-page\"><div><p class=\"kicker\">Changelog editor</p><h1>Edit release notes.</h1><p>Save the draft here, then publish explicitly from the admin dashboard.</p></div>");
+    try writer.writeAll("<section class=\"form-page\"><div><h1>Edit release notes</h1><p>Save the draft here, then publish from the admin dashboard.</p></div>");
     try writer.print("<form class=\"stacked-form\" method=\"post\" action=\"/admin/changelog/{d}/content\">", .{entry.id});
     try writer.writeAll(csrf_input);
     try writer.writeAll("<div class=\"form-row\"><label>Title<input name=\"title\" required maxlength=\"160\" value=\"");
