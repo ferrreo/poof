@@ -135,6 +135,9 @@ fn renderIssueList(
         return context.empty(.internal_server_error);
     renderIssueCards(&writer, result.items, result.total) catch
         return context.empty(.internal_server_error);
+    renderPager(&writer, query, result.total) catch
+        return context.empty(.internal_server_error);
+    writer.writeAll("</section>") catch return context.empty(.internal_server_error);
     page.end(&writer) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
@@ -158,6 +161,11 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
         error.NotFound => renderNotFound(context),
         else => context.empty(.service_unavailable),
     };
+    const viewer_voted = if (current) |value|
+        database.hasVote(issue_id, value.user.id) catch
+            return context.empty(.service_unavailable)
+    else
+        false;
     var comment_storage: [100]models.Comment = undefined;
     const comments = database.listComments(allocator, issue_id, &comment_storage) catch
         return context.empty(.service_unavailable);
@@ -180,7 +188,11 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
     ) catch return context.empty(.internal_server_error);
     writer.writeAll("<article class=\"issue-detail\"><header class=\"issue-detail-header\">") catch
         return context.empty(.internal_server_error);
-    writer.print("<p class=\"kicker\">{s} · #{d}</p><h1>", .{ issue.board_name, issue.id }) catch
+    writer.writeAll("<p class=\"kicker\">") catch
+        return context.empty(.internal_server_error);
+    highlight.escapeHtml(&writer, issue.board_name) catch
+        return context.empty(.internal_server_error);
+    writer.print(" · #{d}</p><h1>", .{issue.id}) catch
         return context.empty(.internal_server_error);
     highlight.escapeHtml(&writer, issue.title) catch
         return context.empty(.internal_server_error);
@@ -194,7 +206,14 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
     ) catch return context.empty(.internal_server_error);
     highlight.escapeHtml(&writer, issue.author_name) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("</span></div></header><div class=\"issue-layout\"><div>") catch
+    writer.writeAll("</span></div>") catch return context.empty(.internal_server_error);
+    if (issue.duplicate_of_id) |target| {
+        writer.print(
+            "<p class=\"notice duplicate-notice\">This feedback is a duplicate of <a href=\"/issues/{d}\">issue #{d}</a>.</p>",
+            .{ target, target },
+        ) catch return context.empty(.internal_server_error);
+    }
+    writer.writeAll("</header><div class=\"issue-layout\"><div>") catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"card markdown\">") catch
         return context.empty(.internal_server_error);
@@ -216,6 +235,7 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
         &writer,
         if (csrf_token) |*token| token.hiddenInput() else null,
         issue,
+        viewer_voted,
     ) catch
         return context.empty(.internal_server_error);
     if (issue.evidence_url) |url| {
@@ -646,12 +666,43 @@ fn renderIssueCards(writer: *std.Io.Writer, items: []const models.IssueSummary, 
     if (items.len == 0) {
         try writer.writeAll("<div class=\"empty-card\"><h3>The board is ready for its first idea.</h3>");
         try writer.writeAll("<p>Sign in with Discord and tell us what would make this product better.</p>");
-        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">Start the conversation →</a></div></section>");
+        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">Start the conversation →</a></div>");
         return;
     }
     try writer.print("<div class=\"issue-list\" data-total=\"{d}\">", .{total});
     for (items) |issue| try renderIssueCard(writer, issue);
-    try writer.writeAll("</div></section>");
+    try writer.writeAll("</div>");
+}
+
+fn renderPager(writer: *std.Io.Writer, query: ListQuery, total: i64) !void {
+    const current = @max(query.page, 1);
+    if (current == 1 and total <= 20) return;
+    try writer.writeAll("<nav class=\"pagination\" aria-label=\"Feedback pages\">");
+    if (current > 1) try renderPageForm(writer, query, current - 1, "← Previous");
+    if (@as(i64, current) * 20 < total) try renderPageForm(writer, query, current + 1, "Next →");
+    try writer.writeAll("</nav>");
+}
+
+fn renderPageForm(
+    writer: *std.Io.Writer,
+    query: ListQuery,
+    target_page: u16,
+    label: []const u8,
+) !void {
+    try writer.writeAll("<form method=\"get\" action=\"/issues\">");
+    try writer.print("<input type=\"hidden\" name=\"page\" value=\"{d}\">", .{target_page});
+    try writer.print("<input type=\"hidden\" name=\"sort\" value=\"{s}\">", .{@tagName(query.sort)});
+    try writer.print("<input type=\"hidden\" name=\"board_id\" value=\"{d}\">", .{query.board_id});
+    try writer.print("<input type=\"hidden\" name=\"kind\" value=\"{s}\">", .{@tagName(query.kind)});
+    try writer.print("<input type=\"hidden\" name=\"status\" value=\"{s}\">", .{@tagName(query.status)});
+    if (query.q) |value| {
+        try writer.writeAll("<input type=\"hidden\" name=\"q\" value=\"");
+        try highlight.escapeHtml(writer, value);
+        try writer.writeAll("\">");
+    }
+    try writer.writeAll("<button class=\"button button-quiet\" type=\"submit\">");
+    try writer.writeAll(label);
+    try writer.writeAll("</button></form>");
 }
 
 fn renderIssueCard(writer: *std.Io.Writer, issue: models.IssueSummary) !void {
@@ -754,6 +805,7 @@ fn renderVoteForm(
     writer: *std.Io.Writer,
     csrf_input: ?[]const u8,
     issue: models.Issue,
+    viewer_voted: bool,
 ) !void {
     const hidden = csrf_input orelse {
         try writer.writeAll("<a class=\"button button-primary\" href=\"/auth/discord\">Sign in to vote</a>");
@@ -761,8 +813,14 @@ fn renderVoteForm(
     };
     try writer.print("<form method=\"post\" action=\"/issues/{d}/vote\">", .{issue.id});
     try writer.writeAll(hidden);
-    try writer.writeAll("<input type=\"hidden\" name=\"selected\" value=\"true\">");
-    try writer.print("<button class=\"button button-primary\" type=\"submit\">▲ Vote · {d}</button></form>", .{issue.vote_count});
+    try writer.print("<input type=\"hidden\" name=\"selected\" value=\"{s}\">", .{
+        if (viewer_voted) "false" else "true",
+    });
+    try writer.print("<button class=\"button {s}\" type=\"submit\">{s} · {d}</button></form>", .{
+        if (viewer_voted) "button-quiet" else "button-primary",
+        if (viewer_voted) "Remove vote" else "▲ Vote",
+        issue.vote_count,
+    });
 }
 
 fn renderIssueForm(

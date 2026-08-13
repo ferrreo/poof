@@ -107,7 +107,7 @@ pub fn handle(
             null;
         const request_digest = if (mutating) digestArguments(name, arguments) else null;
         if (key) |request_key| {
-            const existing = context.state.database.?.idempotencyResult(
+            const claim = context.state.database.?.claimIdempotency(
                 allocator,
                 principal.token.id,
                 name,
@@ -123,23 +123,33 @@ pub fn handle(
                 else
                     "Idempotency lookup failed",
             );
-            if (existing) |prior_result| {
-                protocol.beginResult(&writer, id) catch
-                    return context.empty(.internal_server_error);
-                writer.writeAll(prior_result) catch
-                    return context.empty(.internal_server_error);
-                writer.writeByte('}') catch return context.empty(.internal_server_error);
-                context.state.database.?.recordAutomation(
-                    principal.token.id,
-                    principal.owner.id,
-                    method,
-                    name,
-                    "success",
-                    "idempotent replay",
-                );
-                var response = context.jsonBorrowed(.ok, workspace.rendered(&writer));
-                response.setHeaderStatic("cache-control", "no-store") catch {};
-                return response;
+            switch (claim) {
+                .acquired => {},
+                .pending => return rpcError(
+                    context,
+                    &workspace,
+                    id,
+                    -32010,
+                    "An operation with this idempotency key is still in progress",
+                ),
+                .replay => |prior_result| {
+                    protocol.beginResult(&writer, id) catch
+                        return context.empty(.internal_server_error);
+                    writer.writeAll(prior_result) catch
+                        return context.empty(.internal_server_error);
+                    writer.writeByte('}') catch return context.empty(.internal_server_error);
+                    context.state.database.?.recordAutomation(
+                        principal.token.id,
+                        principal.owner.id,
+                        method,
+                        name,
+                        "success",
+                        "idempotent replay",
+                    );
+                    var response = context.jsonBorrowed(.ok, workspace.rendered(&writer));
+                    response.setHeaderStatic("cache-control", "no-store") catch {};
+                    return response;
+                },
             }
         }
         protocol.beginResult(&writer, id) catch return context.empty(.internal_server_error);
@@ -152,6 +162,12 @@ pub fn handle(
             name,
             arguments,
         ) catch |problem| {
+            if (key) |request_key| context.state.database.?.releaseIdempotency(
+                principal.token.id,
+                name,
+                request_key,
+                request_digest.?,
+            );
             context.state.database.?.recordAutomation(
                 principal.token.id,
                 principal.owner.id,
@@ -286,6 +302,12 @@ fn callTool(
             try protocol.writeJsonString(writer, comment.author_name);
             try writer.writeAll(",\"body\":");
             try protocol.writeJsonString(writer, comment.body_markdown);
+            try writer.writeAll(",\"parent_id\":");
+            if (comment.parent_id) |parent_id| {
+                try writer.print("{d}", .{parent_id});
+            } else {
+                try writer.writeAll("null");
+            }
             try writer.writeByte('}');
         }
         try writer.writeAll("]}}");
@@ -455,7 +477,9 @@ fn callTool(
             "idempotency_key", "title", "slug", "summary", "body", "version", "issue_ids",
         });
         _ = try idempotencyKey(arguments);
-        const changelog_id = try database.createChangelog(principal.owner.id, .{
+        var linked_storage: [100]i64 = undefined;
+        const linked = try parseIdArray(arguments, "issue_ids", &linked_storage);
+        const changelog_id = try database.createChangelogWithIssues(principal.owner.id, .{
             .title = protocol.string(arguments, "title") orelse return error.InvalidArguments,
             .slug = protocol.string(arguments, "slug") orelse return error.InvalidArguments,
             .summary = protocol.string(arguments, "summary") orelse
@@ -463,10 +487,7 @@ fn callTool(
             .body_markdown = protocol.string(arguments, "body") orelse
                 return error.InvalidArguments,
             .version = protocol.string(arguments, "version"),
-        });
-        var linked_storage: [100]i64 = undefined;
-        const linked = try parseIdArray(arguments, "issue_ids", &linked_storage);
-        try database.setChangelogIssues(changelog_id, linked);
+        }, linked);
         try protocol.writeToolText(writer, "Changelog draft created.");
         try writer.print(",\"structuredContent\":{{\"changelog_id\":{d}}}}}", .{changelog_id});
         return;
@@ -497,7 +518,9 @@ fn callTool(
         });
         _ = try idempotencyKey(arguments);
         const changelog_id = try positiveId(arguments, "changelog_id");
-        try database.updateChangelog(changelog_id, .{
+        var linked_storage: [100]i64 = undefined;
+        const linked = try parseIdArray(arguments, "issue_ids", &linked_storage);
+        try database.updateChangelogWithIssues(changelog_id, .{
             .title = protocol.string(arguments, "title") orelse return error.InvalidArguments,
             .slug = protocol.string(arguments, "slug") orelse return error.InvalidArguments,
             .summary = protocol.string(arguments, "summary") orelse
@@ -505,10 +528,7 @@ fn callTool(
             .body_markdown = protocol.string(arguments, "body") orelse
                 return error.InvalidArguments,
             .version = protocol.string(arguments, "version"),
-        });
-        var linked_storage: [100]i64 = undefined;
-        const linked = try parseIdArray(arguments, "issue_ids", &linked_storage);
-        try database.setChangelogIssues(changelog_id, linked);
+        }, linked);
         try protocol.writeToolText(writer, "Changelog updated.");
         try writer.writeAll("}");
         return;
@@ -606,7 +626,6 @@ fn rpcError(
 }
 
 fn selectVersion(requested: []const u8) ?[]const u8 {
-    if (std.mem.eql(u8, requested, "2026-07-28")) return "2026-07-28";
     if (std.mem.eql(u8, requested, "2025-06-18")) return "2025-06-18";
     return null;
 }
@@ -708,8 +727,12 @@ fn writeIssue(writer: *std.Io.Writer, issue: models.Issue) !void {
     try protocol.writeJsonString(writer, @tagName(issue.status));
     try writer.writeAll(",\"priority\":");
     try protocol.writeJsonString(writer, @tagName(issue.priority));
+    try writer.writeAll(",\"author\":");
+    try protocol.writeJsonString(writer, issue.author_name);
+    try writer.writeAll(",\"board\":");
+    try protocol.writeJsonString(writer, issue.board_name);
     try writer.print(
-        ",\"board_id\":{d},\"votes\":{d},\"comments\":{d},\"locked\":{s}}}",
+        ",\"board_id\":{d},\"votes\":{d},\"comments\":{d},\"locked\":{s}",
         .{
             issue.board_id,
             issue.vote_count,
@@ -717,6 +740,33 @@ fn writeIssue(writer: *std.Io.Writer, issue: models.Issue) !void {
             if (issue.locked) "true" else "false",
         },
     );
+    try writeOptionalStringField(writer, "reproduction_steps", issue.reproduction_steps);
+    try writeOptionalStringField(writer, "expected_behavior", issue.expected_behavior);
+    try writeOptionalStringField(writer, "actual_behavior", issue.actual_behavior);
+    try writeOptionalStringField(writer, "environment", issue.environment);
+    try writeOptionalStringField(writer, "evidence_url", issue.evidence_url);
+    try writer.writeAll(",\"duplicate_of_id\":");
+    if (issue.duplicate_of_id) |target| {
+        try writer.print("{d}", .{target});
+    } else {
+        try writer.writeAll("null");
+    }
+    try writer.writeByte('}');
+}
+
+fn writeOptionalStringField(
+    writer: *std.Io.Writer,
+    name: []const u8,
+    value: ?[]const u8,
+) !void {
+    try writer.writeAll(",");
+    try protocol.writeJsonString(writer, name);
+    try writer.writeAll(":");
+    if (value) |text| {
+        try protocol.writeJsonString(writer, text);
+    } else {
+        try writer.writeAll("null");
+    }
 }
 
 fn toolMessage(problem: anyerror) []const u8 {

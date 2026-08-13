@@ -24,6 +24,11 @@ const migrations = [_]Migration{
         .name = "action_rate_limits",
         .sql = @embedFile("migration_003"),
     },
+    .{
+        .version = 4,
+        .name = "concurrency_guards",
+        .sql = @embedFile("migration_004"),
+    },
 };
 
 const advisory_lock_id: i64 = 0x506f6f664d696772;
@@ -76,13 +81,22 @@ fn querySchemaTable(connection: *pg.Conn) !bool {
 }
 
 fn rejectUnknownMigrations(connection: *pg.Conn) store.Error!void {
-    var row = (connection.row(
-        "SELECT COALESCE(max(version), 0) FROM schema_migrations",
+    var result = connection.query(
+        "SELECT version FROM schema_migrations ORDER BY version",
         .{},
-    ) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
-    defer row.deinit() catch {};
-    const maximum = row.get(i32, 0) catch return error.InvalidDatabaseData;
-    if (maximum > migrations[migrations.len - 1].version) return error.UnknownMigration;
+    ) catch return error.DatabaseUnavailable;
+    defer result.deinit();
+    while (result.next() catch return error.DatabaseUnavailable) |row| {
+        const version = row.get(i32, 0) catch return error.InvalidDatabaseData;
+        var known = false;
+        for (migrations) |migration| {
+            if (migration.version == version) {
+                known = true;
+                break;
+            }
+        }
+        if (!known) return error.UnknownMigration;
+    }
 }
 
 fn appliedChecksum(connection: *pg.Conn, version: i32) store.Error!?[32]u8 {

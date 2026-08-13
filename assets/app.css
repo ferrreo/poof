@@ -794,6 +794,40 @@ h2 {
   margin-bottom: 18px;
 }
 
+.admin-filters,
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-filters {
+  margin-bottom: 13px;
+}
+
+.admin-filters input,
+.admin-filters select {
+  min-height: 40px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font: inherit;
+}
+
+.admin-filters input {
+  flex: 1;
+}
+
+.pagination {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.pagination form {
+  margin: 0;
+}
+
 .admin-section-heading h2 {
   font-size: 28px;
 }
@@ -1423,6 +1457,11 @@ footer a {
 
   .admin-issue {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-filters {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .admin-issue-title {

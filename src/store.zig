@@ -53,6 +53,12 @@ pub const AutomationEvent = struct {
     created_at_us: i64,
 };
 
+pub const IdempotencyClaim = union(enum) {
+    acquired,
+    pending,
+    replay: []const u8,
+};
+
 pub const Board = struct {
     id: i64,
     slug: []const u8,
@@ -101,6 +107,7 @@ pub const IssueSummary = struct {
     title: []const u8,
     pinned: bool,
     locked: bool,
+    duplicate_of_id: ?i64,
     vote_count: i64,
     comment_count: i64,
     created_at_us: i64,

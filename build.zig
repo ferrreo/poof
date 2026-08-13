@@ -174,5 +174,8 @@ fn applicationModule(
     module.addAnonymousImport("migration_003", .{
         .root_source_file = b.path("migrations/003_action_rate_limits.sql"),
     });
+    module.addAnonymousImport("migration_004", .{
+        .root_source_file = b.path("migrations/004_concurrency_guards.sql"),
+    });
     return module;
 }

@@ -9,9 +9,11 @@ Content-Type: application/json
 Accept: application/json
 ```
 
-Poof supports protocol versions `2025-06-18` and `2026-07-28`, finite JSON
-responses, and the methods `initialize`, `notifications/initialized`, `ping`,
-`tools/list`, and `tools/call`.
+Poof supports the widely deployed `2025-06-18` Streamable HTTP protocol,
+finite JSON responses, and the methods `initialize`,
+`notifications/initialized`, `ping`, `tools/list`, and `tools/call`. It does
+not advertise the incompatible stateless 2026 protocol until that separate
+transport is fully implemented.
 
 ## Scopes
 

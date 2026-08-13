@@ -102,6 +102,39 @@ test "PostgreSQL migrations and feedback lifecycle" {
     );
     try std.testing.expectEqual(admin.id, api_principal.owner.id);
     try std.testing.expect(api_principal.token.scopes.contains(.admin_issues));
+    const claim_digest = [_]u8{0x91} ** 32;
+    const first_claim = try database.claimIdempotency(
+        arena,
+        stored_token.id,
+        "poof_set_vote",
+        "concurrent-claim",
+        claim_digest,
+    );
+    try std.testing.expect(first_claim == .acquired);
+    const pending_claim = try database.claimIdempotency(
+        arena,
+        stored_token.id,
+        "poof_set_vote",
+        "concurrent-claim",
+        claim_digest,
+    );
+    try std.testing.expect(pending_claim == .pending);
+    try std.testing.expectError(
+        error.Conflict,
+        database.claimIdempotency(
+            arena,
+            stored_token.id,
+            "poof_set_vote",
+            "concurrent-claim",
+            [_]u8{0x92} ** 32,
+        ),
+    );
+    database.releaseIdempotency(
+        stored_token.id,
+        "poof_set_vote",
+        "concurrent-claim",
+        claim_digest,
+    );
     try database.revokeApiToken(admin.id, stored_token.id);
     try std.testing.expectError(
         error.NotFound,
@@ -205,6 +238,31 @@ test "PostgreSQL migrations and feedback lifecycle" {
         "portable-json-exports-for-self-hosters",
         edited.slug,
     );
+    const duplicate_target = try database.createIssue(member.id, .{
+        .board_id = boards[0].id,
+        .kind = .improvement,
+        .title = "Export feedback as portable JSON",
+        .body = "This request intentionally overlaps the completed export feature.",
+    });
+    try database.adminUpdateIssue(issue_id, admin.id, .{
+        .status = .completed,
+        .priority = .high,
+        .board_id = boards[0].id,
+        .pinned = true,
+        .locked = true,
+        .duplicate_of_id = duplicate_target,
+    });
+    try std.testing.expectError(
+        error.Conflict,
+        database.adminUpdateIssue(duplicate_target, admin.id, .{
+            .status = .pending,
+            .priority = .none,
+            .board_id = boards[0].id,
+            .pinned = false,
+            .locked = false,
+            .duplicate_of_id = issue_id,
+        }),
+    );
 
     var issue_storage: [10]poof.store.IssueSummary = undefined;
     const listed = try database.listIssues(arena, .{
@@ -231,16 +289,24 @@ test "PostgreSQL migrations and feedback lifecycle" {
         5,
     );
     try database.archiveBoard(board_id);
+    try std.testing.expectError(
+        error.Conflict,
+        database.createIssue(member.id, .{
+            .board_id = board_id,
+            .kind = .feature,
+            .title = "This board is archived",
+            .body = "Archived boards must reject newly submitted feedback.",
+        }),
+    );
 
-    const changelog_id = try database.createChangelog(admin.id, .{
+    const changelog_id = try database.createChangelogWithIssues(admin.id, .{
         .slug = "portable-exports",
         .title = "Portable exports are here",
         .summary = "Download a complete copy of your feedback.",
         .body_markdown = "Use the new **Export** action to download JSON.",
         .version = "0.1.0",
         .tags = &.{"new-feature"},
-    });
-    try database.setChangelogIssues(changelog_id, &.{issue_id});
+    }, &.{issue_id});
     var changelog_storage: [8]poof.store.Changelog = undefined;
     const drafts = try database.listChangelogs(
         arena,
@@ -249,14 +315,14 @@ test "PostgreSQL migrations and feedback lifecycle" {
     );
     try std.testing.expectEqual(@as(usize, 1), drafts.len);
     try std.testing.expect(drafts[0].published_at_us == null);
-    try database.updateChangelog(changelog_id, .{
+    try database.updateChangelogWithIssues(changelog_id, .{
         .slug = "portable-json-exports",
         .title = "Portable JSON exports are here",
         .summary = "Download a complete copy of feedback.",
         .body_markdown = "Use the new **Export** action to download a complete JSON backup.",
         .version = "0.1.0",
         .tags = &.{"new-feature"},
-    });
+    }, &.{issue_id});
     try database.publishChangelog(changelog_id, true);
     const published = try database.getChangelogBySlug(
         arena,

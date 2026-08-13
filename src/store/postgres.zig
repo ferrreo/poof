@@ -158,7 +158,13 @@ pub const Postgres = struct {
         _ = self.pool.exec(
             \\DELETE FROM oauth_states WHERE expires_at < now() - interval '1 day';
             \\DELETE FROM sessions
-            \\WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days'
+            \\WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days';
+            \\DELETE FROM idempotency_keys
+            \\WHERE expires_at < now() AND response_body IS NOT NULL;
+            \\DELETE FROM user_rate_buckets
+            \\WHERE bucket_start < extract(epoch FROM now())::bigint - 172800;
+            \\DELETE FROM api_rate_buckets
+            \\WHERE bucket_start < extract(epoch FROM now())::bigint - 172800
         , .{}) catch return error.DatabaseUnavailable;
     }
 
@@ -345,11 +351,15 @@ pub const Postgres = struct {
         limit: i64,
     ) models.Error!bool {
         var row = (self.pool.row(
-            \\SELECT count(*) < $2
-            \\FROM automation_events
-            \\WHERE token_id = $1
-            \\  AND created_at > now() - interval '1 minute'
-        , .{ pg.Binary{ .data = &token_id }, limit }) catch
+            \\INSERT INTO api_rate_buckets (
+            \\    token_id, bucket_start, request_count
+            \\) VALUES (
+            \\    $1, floor(extract(epoch FROM now()) / 60)::bigint * 60, 1
+            \\)
+            \\ON CONFLICT (token_id, bucket_start) DO UPDATE
+            \\SET request_count = api_rate_buckets.request_count + 1
+            \\RETURNING request_count <= $2
+        , .{ pg.Binary{ .data = &token_id }, @as(i32, @intCast(limit)) }) catch
             return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
         defer row.deinit() catch {};
         return row.get(bool, 0) catch error.InvalidDatabaseData;
@@ -363,46 +373,60 @@ pub const Postgres = struct {
         window_seconds: i32,
     ) models.Error!bool {
         var row = (self.pool.row(
-            \\WITH recent AS (
-            \\    SELECT count(*) AS total
-            \\    FROM rate_limit_events
-            \\    WHERE user_id = $1 AND action = $2
-            \\      AND created_at > now() - make_interval(secs => $4::double precision)
-            \\), admitted AS (
-            \\    INSERT INTO rate_limit_events (user_id, action)
-            \\    SELECT $1, $2 FROM recent WHERE total < $3::bigint
-            \\    RETURNING id
+            \\INSERT INTO user_rate_buckets (
+            \\    user_id, action, bucket_start, request_count
+            \\) VALUES (
+            \\    $1, $2,
+            \\    floor(extract(epoch FROM now()) / $4::numeric)::bigint * $4::bigint,
+            \\    1
             \\)
-            \\SELECT EXISTS (SELECT 1 FROM admitted)
+            \\ON CONFLICT (user_id, action, bucket_start) DO UPDATE
+            \\SET request_count = user_rate_buckets.request_count + 1
+            \\RETURNING request_count <= $3
         , .{
             user_id,
             action,
-            @as(i64, limit),
-            @as(f64, @floatFromInt(window_seconds)),
+            limit,
+            window_seconds,
         }) catch
             return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
         defer row.deinit() catch {};
         return row.get(bool, 0) catch error.InvalidDatabaseData;
     }
 
-    pub fn idempotencyResult(
+    pub fn claimIdempotency(
         self: *Postgres,
         allocator: std.mem.Allocator,
         token_id: [16]u8,
         tool_name: []const u8,
         request_key: []const u8,
         request_digest: [32]u8,
-    ) models.Error!?[]const u8 {
+    ) models.Error!models.IdempotencyClaim {
         var row = (self.pool.row(
-            \\SELECT request_digest, response_body::text
-            \\FROM idempotency_keys
-            \\WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
-            \\  AND expires_at > now()
+            \\WITH inserted AS (
+            \\    INSERT INTO idempotency_keys (
+            \\        token_id, tool_name, request_key, request_digest,
+            \\        response_body, expires_at
+            \\    ) VALUES (
+            \\        $1, $2, $3, $4, NULL, now() + interval '24 hours'
+            \\    )
+            \\    ON CONFLICT (token_id, tool_name, request_key) DO NOTHING
+            \\    RETURNING request_digest, response_body, true AS acquired
+            \\), selected AS (
+            \\    SELECT request_digest, response_body, false AS acquired
+            \\    FROM idempotency_keys
+            \\    WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
+            \\)
+            \\SELECT request_digest, response_body::text, acquired FROM inserted
+            \\UNION ALL
+            \\SELECT request_digest, response_body::text, acquired FROM selected
+            \\LIMIT 1
         , .{
             pg.Binary{ .data = &token_id },
             tool_name,
             request_key,
-        }) catch return error.DatabaseUnavailable) orelse return null;
+            pg.Binary{ .data = &request_digest },
+        }) catch return error.DatabaseUnavailable) orelse return error.DatabaseUnavailable;
         defer row.deinit() catch {};
         const stored_digest = row.get([]u8, 0) catch return error.InvalidDatabaseData;
         if (stored_digest.len != 32 or !std.crypto.timing_safe.eql(
@@ -410,7 +434,13 @@ pub const Postgres = struct {
             stored_digest[0..32].*,
             request_digest,
         )) return error.Conflict;
-        return try copyQueryColumn(&row, allocator, 1);
+        const acquired = row.get(bool, 2) catch return error.InvalidDatabaseData;
+        if (acquired) return .acquired;
+        const response = row.get(?[]const u8, 1) catch return error.InvalidDatabaseData;
+        return if (response) |json|
+            .{ .replay = allocator.dupe(u8, json) catch return error.CapacityExceeded }
+        else
+            .pending;
     }
 
     pub fn saveIdempotency(
@@ -421,12 +451,10 @@ pub const Postgres = struct {
         request_digest: [32]u8,
         response_json: []const u8,
     ) models.Error!void {
-        _ = self.pool.exec(
-            \\INSERT INTO idempotency_keys (
-            \\    token_id, tool_name, request_key, request_digest,
-            \\    response_body, expires_at
-            \\) VALUES ($1, $2, $3, $4, $5::jsonb, now() + interval '24 hours')
-            \\ON CONFLICT (token_id, tool_name, request_key) DO NOTHING
+        const affected = self.pool.exec(
+            \\UPDATE idempotency_keys SET response_body = $5::jsonb
+            \\WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
+            \\  AND request_digest = $4 AND response_body IS NULL
         , .{
             pg.Binary{ .data = &token_id },
             tool_name,
@@ -434,6 +462,26 @@ pub const Postgres = struct {
             pg.Binary{ .data = &request_digest },
             response_json,
         }) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.Conflict;
+    }
+
+    pub fn releaseIdempotency(
+        self: *Postgres,
+        token_id: [16]u8,
+        tool_name: []const u8,
+        request_key: []const u8,
+        request_digest: [32]u8,
+    ) void {
+        _ = self.pool.exec(
+            \\DELETE FROM idempotency_keys
+            \\WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
+            \\  AND request_digest = $4 AND response_body IS NULL
+        , .{
+            pg.Binary{ .data = &token_id },
+            tool_name,
+            request_key,
+            pg.Binary{ .data = &request_digest },
+        }) catch {};
     }
 
     pub fn listBoards(
@@ -448,7 +496,9 @@ pub const Postgres = struct {
             \\FROM boards
             \\WHERE $1 OR archived_at IS NULL
             \\ORDER BY sort_order, id
-        , .{include_archived}) catch return error.DatabaseUnavailable;
+            \\LIMIT $2
+        , .{ include_archived, @as(i32, @intCast(output.len)) }) catch
+            return error.DatabaseUnavailable;
         defer result.deinit();
 
         var used: usize = 0;
@@ -487,7 +537,10 @@ pub const Postgres = struct {
             \\    slug, board_id, author_id, kind, title, body_markdown,
             \\    reproduction_steps, expected_behavior, actual_behavior,
             \\    environment, evidence_url
-            \\) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            \\)
+            \\SELECT $1, b.id, $3, $4, $5, $6, $7, $8, $9, $10, $11
+            \\FROM boards b
+            \\WHERE b.id = $2 AND b.archived_at IS NULL
             \\RETURNING id
         , .{
             slug,
@@ -501,7 +554,7 @@ pub const Postgres = struct {
             input.actual_behavior,
             input.environment,
             input.evidence_url,
-        }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        }) catch return error.DatabaseUnavailable) orelse return error.Conflict;
         const issue_id = row.get(i64, 0) catch return error.InvalidDatabaseData;
         row.deinit() catch return error.DatabaseUnavailable;
 
@@ -590,6 +643,7 @@ pub const Postgres = struct {
             \\SELECT DISTINCT i.id, i.slug, b.name, i.board_id,
             \\       COALESCE(u.display_name, u.username),
             \\       i.kind, i.status, i.priority, i.title, i.pinned, i.locked,
+            \\       i.duplicate_of_id,
             \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
             \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
             \\       i.created_at
@@ -630,6 +684,21 @@ pub const Postgres = struct {
                 .{ issue_id, user_id },
             ) catch return error.DatabaseUnavailable;
         }
+    }
+
+    pub fn hasVote(
+        self: *Postgres,
+        issue_id: i64,
+        user_id: i64,
+    ) models.Error!bool {
+        var row = (self.pool.row(
+            \\SELECT EXISTS (
+            \\    SELECT 1 FROM issue_votes WHERE issue_id = $1 AND user_id = $2
+            \\)
+        , .{ issue_id, user_id }) catch
+            return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        defer row.deinit() catch {};
+        return row.get(bool, 0) catch error.InvalidDatabaseData;
     }
 
     pub fn addComment(
@@ -701,7 +770,9 @@ pub const Postgres = struct {
             \\JOIN users u ON u.id = c.author_id
             \\WHERE c.issue_id = $1 AND c.deleted_at IS NULL
             \\ORDER BY c.created_at, c.id
-        , .{issue_id}) catch return error.DatabaseUnavailable;
+            \\LIMIT $2
+        , .{ issue_id, @as(i32, @intCast(output.len)) }) catch
+            return error.DatabaseUnavailable;
         defer result.deinit();
         var used: usize = 0;
         while (result.next() catch return error.DatabaseUnavailable) |row| {
@@ -750,6 +821,28 @@ pub const Postgres = struct {
         @memcpy(old_status_copy[0..old_status.len], old_status);
         @memcpy(old_priority_copy[0..old_priority.len], old_priority);
         previous.deinit() catch return error.DatabaseUnavailable;
+
+        if (update.duplicate_of_id) |target_id| {
+            var cycle_row = (connection.row(
+                \\WITH RECURSIVE chain AS (
+                \\    SELECT id, duplicate_of_id FROM issues WHERE id = $2
+                \\    UNION ALL
+                \\    SELECT i.id, i.duplicate_of_id
+                \\    FROM issues i
+                \\    JOIN chain c ON i.id = c.duplicate_of_id
+                \\)
+                \\SELECT
+                \\    EXISTS (SELECT 1 FROM issues WHERE id = $2),
+                \\    EXISTS (SELECT 1 FROM chain WHERE id = $1)
+            , .{ issue_id, target_id }) catch
+                return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+            const target_exists = cycle_row.get(bool, 0) catch
+                return error.InvalidDatabaseData;
+            const creates_cycle = cycle_row.get(bool, 1) catch
+                return error.InvalidDatabaseData;
+            cycle_row.deinit() catch return error.DatabaseUnavailable;
+            if (!target_exists or creates_cycle) return error.Conflict;
+        }
 
         const affected = connection.exec(
             \\UPDATE issues SET
@@ -913,32 +1006,37 @@ pub const Postgres = struct {
         description: []const u8,
         color: []const u8,
     ) models.Error!i64 {
-        if (name.len == 0 or name.len > 80 or slug.len == 0 or slug.len > 80 or
-            description.len > 500)
-        {
-            return error.Conflict;
-        }
+        if (!validBoard(name, slug, description, color)) return error.Conflict;
         var row = (self.pool.row(
             \\INSERT INTO boards (name, slug, description, color, sort_order)
-            \\VALUES (
+            \\SELECT
             \\    $1, $2, $3, $4,
             \\    COALESCE((SELECT max(sort_order) + 1 FROM boards), 0)
-            \\)
+            \\WHERE (SELECT count(*) FROM boards) < 32
             \\RETURNING id
         , .{ name, slug, description, color }) catch
-            return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+            return error.DatabaseUnavailable) orelse return error.Conflict;
         defer row.deinit() catch {};
         return row.get(i64, 0) catch error.InvalidDatabaseData;
     }
 
     pub fn archiveBoard(self: *Postgres, board_id: i64) models.Error!void {
-        const affected = self.pool.exec(
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+        _ = connection.exec(
+            "SELECT pg_advisory_xact_lock(5790053260621242962)",
+            .{},
+        ) catch return error.DatabaseUnavailable;
+        const affected = connection.exec(
             \\UPDATE boards SET archived_at = now()
             \\WHERE id = $1
             \\  AND archived_at IS NULL
             \\  AND (SELECT count(*) FROM boards WHERE archived_at IS NULL) > 1
         , .{board_id}) catch return error.DatabaseUnavailable;
         if ((affected orelse 0) != 1) return error.Conflict;
+        connection.commit() catch return error.DatabaseUnavailable;
     }
 
     pub fn updateBoard(
@@ -950,8 +1048,8 @@ pub const Postgres = struct {
         color: []const u8,
         sort_order: i32,
     ) models.Error!void {
-        if (name.len == 0 or name.len > 80 or slug.len == 0 or slug.len > 80 or
-            description.len > 500 or sort_order < 0 or sort_order > 10_000)
+        if (!validBoard(name, slug, description, color) or
+            sort_order < 0 or sort_order > 10_000)
         {
             return error.Conflict;
         }
@@ -989,6 +1087,38 @@ pub const Postgres = struct {
         return row.get(i64, 0) catch error.InvalidDatabaseData;
     }
 
+    pub fn createChangelogWithIssues(
+        self: *Postgres,
+        author_id: i64,
+        input: models.ChangelogInput,
+        issue_ids: []const i64,
+    ) models.Error!i64 {
+        if (!validChangelog(input)) return error.Conflict;
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+        var row = (connection.row(
+            \\INSERT INTO changelog_entries (
+            \\    author_id, slug, title, summary, body_markdown, version, tags
+            \\) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            \\RETURNING id
+        , .{
+            author_id,
+            input.slug,
+            input.title,
+            input.summary,
+            input.body_markdown,
+            input.version,
+            input.tags,
+        }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        const changelog_id = row.get(i64, 0) catch return error.InvalidDatabaseData;
+        row.deinit() catch return error.DatabaseUnavailable;
+        try replaceChangelogIssues(connection, changelog_id, issue_ids);
+        connection.commit() catch return error.DatabaseUnavailable;
+        return changelog_id;
+    }
+
     pub fn updateChangelog(
         self: *Postgres,
         changelog_id: i64,
@@ -1010,6 +1140,36 @@ pub const Postgres = struct {
             input.tags,
         }) catch return error.DatabaseUnavailable;
         if ((affected orelse 0) != 1) return error.NotFound;
+    }
+
+    pub fn updateChangelogWithIssues(
+        self: *Postgres,
+        changelog_id: i64,
+        input: models.ChangelogInput,
+        issue_ids: []const i64,
+    ) models.Error!void {
+        if (!validChangelog(input)) return error.Conflict;
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+        const affected = connection.exec(
+            \\UPDATE changelog_entries SET
+            \\    slug = $2, title = $3, summary = $4, body_markdown = $5,
+            \\    version = $6, tags = $7
+            \\WHERE id = $1
+        , .{
+            changelog_id,
+            input.slug,
+            input.title,
+            input.summary,
+            input.body_markdown,
+            input.version,
+            input.tags,
+        }) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+        try replaceChangelogIssues(connection, changelog_id, issue_ids);
+        connection.commit() catch return error.DatabaseUnavailable;
     }
 
     pub fn publishChangelog(
@@ -1037,21 +1197,7 @@ pub const Postgres = struct {
         connection.begin() catch return error.DatabaseUnavailable;
         errdefer connection.tryRollback() catch {};
 
-        _ = connection.exec(
-            "DELETE FROM changelog_issue_links WHERE changelog_id = $1",
-            .{changelog_id},
-        ) catch return error.DatabaseUnavailable;
-        for (issue_ids, 0..) |issue_id, index| {
-            const affected = connection.exec(
-                \\INSERT INTO changelog_issue_links (
-                \\    changelog_id, issue_id, sort_order
-                \\)
-                \\SELECT $1, id, $3 FROM issues
-                \\WHERE id = $2 AND status = 'completed'
-            , .{ changelog_id, issue_id, @as(i32, @intCast(index)) }) catch
-                return error.DatabaseUnavailable;
-            if ((affected orelse 0) != 1) return error.Conflict;
-        }
+        try replaceChangelogIssues(connection, changelog_id, issue_ids);
         connection.commit() catch return error.DatabaseUnavailable;
     }
 
@@ -1065,6 +1211,7 @@ pub const Postgres = struct {
             \\SELECT i.id, i.slug, b.name, i.board_id,
             \\       COALESCE(u.display_name, u.username),
             \\       i.kind, i.status, i.priority, i.title, i.pinned, i.locked,
+            \\       i.duplicate_of_id,
             \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
             \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
             \\       i.created_at
@@ -1172,6 +1319,7 @@ const issue_list_sql =
     \\SELECT i.id, i.slug, b.name, i.board_id,
     \\       COALESCE(u.display_name, u.username),
     \\       i.kind, i.status, i.priority, i.title, i.pinned, i.locked,
+    \\       i.duplicate_of_id,
     \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
     \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
     \\       i.created_at
@@ -1284,9 +1432,10 @@ fn readIssueSummary(
         .title = try copyColumn(row, allocator, 8),
         .pinned = row.get(bool, 9) catch return error.InvalidDatabaseData,
         .locked = row.get(bool, 10) catch return error.InvalidDatabaseData,
-        .vote_count = row.get(i64, 11) catch return error.InvalidDatabaseData,
-        .comment_count = row.get(i64, 12) catch return error.InvalidDatabaseData,
-        .created_at_us = row.get(i64, 13) catch return error.InvalidDatabaseData,
+        .duplicate_of_id = row.get(?i64, 11) catch return error.InvalidDatabaseData,
+        .vote_count = row.get(i64, 12) catch return error.InvalidDatabaseData,
+        .comment_count = row.get(i64, 13) catch return error.InvalidDatabaseData,
+        .created_at_us = row.get(i64, 14) catch return error.InvalidDatabaseData,
     };
 }
 
@@ -1357,16 +1506,61 @@ fn validChangelog(input: models.ChangelogInput) bool {
     if (std.mem.trim(u8, input.title, " \t\r\n").len < 3 or input.title.len > 160 or
         std.mem.trim(u8, input.summary, " \t\r\n").len == 0 or input.summary.len > 500 or
         std.mem.trim(u8, input.body_markdown, " \t\r\n").len == 0 or
-        input.body_markdown.len > 64 * 1024 or input.slug.len == 0 or input.slug.len > 180)
+        input.body_markdown.len > 64 * 1024 or !validSlug(input.slug, 180))
     {
         return false;
-    }
-    for (input.slug) |byte| {
-        if (!std.ascii.isLower(byte) and !std.ascii.isDigit(byte) and byte != '-') return false;
     }
     if (input.version) |version| if (version.len == 0 or version.len > 64) return false;
     if (input.tags.len > 12) return false;
     for (input.tags) |tag| if (tag.len == 0 or tag.len > 40) return false;
+    return true;
+}
+
+fn validBoard(
+    name: []const u8,
+    slug: []const u8,
+    description: []const u8,
+    color: []const u8,
+) bool {
+    if (!validPlainText(name, 1, 80) or !validPlainText(description, 0, 500) or
+        !validSlug(slug, 80))
+    {
+        return false;
+    }
+    inline for (.{ "violet", "blue", "green", "amber", "rose", "gray" }) |allowed| {
+        if (std.mem.eql(u8, color, allowed)) return true;
+    }
+    return false;
+}
+
+fn validPlainText(value: []const u8, minimum: usize, maximum: usize) bool {
+    if (value.len < minimum or value.len > maximum or
+        !std.unicode.utf8ValidateSlice(value))
+    {
+        return false;
+    }
+    for (value) |byte| {
+        if (byte < 0x20 and byte != '\t' and byte != '\n') return false;
+    }
+    return true;
+}
+
+fn validSlug(value: []const u8, maximum: usize) bool {
+    if (value.len == 0 or value.len > maximum or value[0] == '-' or
+        value[value.len - 1] == '-')
+    {
+        return false;
+    }
+    var previous_dash = false;
+    for (value) |byte| {
+        if (byte == '-') {
+            if (previous_dash) return false;
+            previous_dash = true;
+        } else {
+            if (!std.ascii.isLower(byte) and !std.ascii.isDigit(byte)) return false;
+            previous_dash = false;
+        }
+    }
     return true;
 }
 
@@ -1453,4 +1647,27 @@ fn readApiTokenQuery(
         .last_used_at_us = row.get(?i64, offset + 6) catch return error.InvalidDatabaseData,
         .created_at_us = row.get(i64, offset + 7) catch return error.InvalidDatabaseData,
     };
+}
+
+fn replaceChangelogIssues(
+    connection: *pg.Conn,
+    changelog_id: i64,
+    issue_ids: []const i64,
+) models.Error!void {
+    if (issue_ids.len > 100) return error.CapacityExceeded;
+    _ = connection.exec(
+        "DELETE FROM changelog_issue_links WHERE changelog_id = $1",
+        .{changelog_id},
+    ) catch return error.DatabaseUnavailable;
+    for (issue_ids, 0..) |issue_id, index| {
+        const affected = connection.exec(
+            \\INSERT INTO changelog_issue_links (
+            \\    changelog_id, issue_id, sort_order
+            \\)
+            \\SELECT $1, id, $3 FROM issues
+            \\WHERE id = $2 AND status = 'completed'
+        , .{ changelog_id, issue_id, @as(i32, @intCast(index)) }) catch
+            return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.Conflict;
+    }
 }

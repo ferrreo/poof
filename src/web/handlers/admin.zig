@@ -8,6 +8,19 @@ const page = @import("../page.zig");
 const request = @import("../request.zig");
 const highlight = @import("../highlight.zig");
 
+const DashboardQuery = struct {
+    page: u16 = 1,
+    q: ?[]const u8 = null,
+    status: enum { all, pending, reviewing, planned, in_progress, completed, closed } = .all,
+};
+
+pub const DashboardDefinition = ploof.Endpoint(.{
+    .query = ploof.Query.typed(DashboardQuery, .{
+        .segments_max = 4,
+        .unknown_fields = .reject,
+    }),
+});
+
 pub const IssueUpdateDefinition = ploof.Endpoint(.{
     .body = ploof.Form.typed(struct {
         status: domain.IssueStatus,
@@ -73,7 +86,10 @@ pub const ChangelogPublishDefinition = ploof.Endpoint(.{
     }, formOptions(1024, 3)),
 });
 
-pub fn dashboard(context: *app_state.Context) app_state.Context.ResponseType {
+pub fn dashboard(
+    context: *app_state.Context,
+    input: DashboardDefinition.InputType,
+) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.empty(.service_unavailable);
     const database = app_state.database(context) orelse
@@ -86,7 +102,21 @@ pub fn dashboard(context: *app_state.Context) app_state.Context.ResponseType {
         else => context.empty(.service_unavailable),
     };
     var issue_storage: [20]models.IssueSummary = undefined;
-    const issues = database.listIssues(allocator, .{ .limit = 20 }, &issue_storage) catch
+    const query = input.query;
+    const issues = database.listIssues(allocator, .{
+        .query = query.q,
+        .status = switch (query.status) {
+            .all => null,
+            .pending => .pending,
+            .reviewing => .reviewing,
+            .planned => .planned,
+            .in_progress => .in_progress,
+            .completed => .completed,
+            .closed => .closed,
+        },
+        .limit = 20,
+        .offset = (@as(u32, @max(query.page, 1)) - 1) * 20,
+    }, &issue_storage) catch
         return context.empty(.service_unavailable);
     var board_storage: [32]models.Board = undefined;
     const boards = database.listBoards(allocator, &board_storage, true) catch
@@ -108,7 +138,7 @@ pub fn dashboard(context: *app_state.Context) app_state.Context.ResponseType {
         return context.empty(.internal_server_error);
     writer.print("<div class=\"admin-stat\"><strong>{d}</strong><span>feedback items</span></div></header>", .{issues.total}) catch
         return context.empty(.internal_server_error);
-    renderIssues(&writer, issues.items, boards, token.hiddenInput()) catch
+    renderIssues(&writer, issues, boards, token.hiddenInput(), query) catch
         return context.empty(.internal_server_error);
     renderBoards(&writer, boards, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -296,22 +326,18 @@ pub fn createChangelog(
     };
     var tag_storage: [12][]const u8 = undefined;
     const tags = parseTags(input.body.tags, &tag_storage);
-    const changelog_id = database.createChangelog(principal.user.id, .{
+    var issue_id_storage: [100]i64 = undefined;
+    const issue_ids = parseIds(input.body.issue_ids, &issue_id_storage) catch
+        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
+    _ = database.createChangelogWithIssues(principal.user.id, .{
         .title = input.body.title,
         .slug = input.body.slug,
         .summary = input.body.summary,
         .body_markdown = input.body.body,
         .version = nonEmpty(input.body.version),
         .tags = tags,
-    }) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details are invalid."),
-        else => context.empty(.service_unavailable),
-    };
-    var issue_id_storage: [100]i64 = undefined;
-    const issue_ids = parseIds(input.body.issue_ids, &issue_id_storage) catch
-        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
-    database.setChangelogIssues(changelog_id, issue_ids) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Only completed issues can be linked."),
+    }, issue_ids) catch |problem| return switch (problem) {
+        error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details or linked issues are invalid."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#changelog");
@@ -387,23 +413,19 @@ pub fn updateChangelog(
         else => context.empty(.service_unavailable),
     };
     var tag_storage: [12][]const u8 = undefined;
-    database.updateChangelog(changelog_id, .{
+    var issue_storage: [100]i64 = undefined;
+    const linked = parseIds(input.body.issue_ids, &issue_storage) catch
+        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
+    database.updateChangelogWithIssues(changelog_id, .{
         .title = input.body.title,
         .slug = input.body.slug,
         .summary = input.body.summary,
         .body_markdown = input.body.body,
         .version = nonEmpty(input.body.version),
         .tags = parseTags(input.body.tags, &tag_storage),
-    }) catch |problem| return switch (problem) {
+    }, linked) catch |problem| return switch (problem) {
         error.NotFound => context.empty(.not_found),
-        error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details are invalid."),
-        else => context.empty(.service_unavailable),
-    };
-    var issue_storage: [100]i64 = undefined;
-    const linked = parseIds(input.body.issue_ids, &issue_storage) catch
-        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
-    database.setChangelogIssues(changelog_id, linked) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Only completed issues can be linked."),
+        error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details or linked issues are invalid."),
         else => context.empty(.service_unavailable),
     };
     var target: [256]u8 = undefined;
@@ -424,17 +446,29 @@ fn adminPrincipal(
 
 fn renderIssues(
     writer: *std.Io.Writer,
-    issues: []const models.IssueSummary,
+    result: models.ListResult,
     boards: []const models.Board,
     csrf_input: []const u8,
+    query: DashboardQuery,
 ) !void {
     try writer.writeAll("<section class=\"admin-section\" id=\"issues\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Triage</p><h2>Feedback backlog</h2></div></div>");
-    if (issues.len == 0) {
+    try writer.writeAll("<form class=\"admin-filters\" method=\"get\" action=\"/admin\"><input type=\"search\" name=\"q\" placeholder=\"Search feedback\" value=\"");
+    if (query.q) |value| try highlight.escapeHtml(writer, value);
+    try writer.writeAll("\"><select name=\"status\"><option value=\"all\">All statuses</option>");
+    inline for (std.meta.tags(domain.IssueStatus)) |status| {
+        try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
+            @tagName(status),
+            if (std.mem.eql(u8, @tagName(query.status), @tagName(status))) " selected" else "",
+            status.label(),
+        });
+    }
+    try writer.writeAll("</select><button class=\"button button-quiet\" type=\"submit\">Filter</button></form>");
+    if (result.items.len == 0) {
         try writer.writeAll("<p class=\"notice\">No feedback needs triage.</p></section>");
         return;
     }
     try writer.writeAll("<div class=\"admin-list\">");
-    for (issues) |issue| {
+    for (result.items) |issue| {
         try writer.print("<form class=\"admin-issue\" method=\"post\" action=\"/admin/issues/{d}\">", .{issue.id});
         try writer.writeAll(csrf_input);
         try writer.writeAll("<div class=\"admin-issue-title\"><strong>");
@@ -472,11 +506,21 @@ fn renderIssues(
         try writer.print("<label class=\"check\"><input type=\"checkbox\" name=\"locked\" value=\"true\"{s}> Lock</label>", .{
             if (issue.locked) " checked" else "",
         });
-        try writer.writeAll("<label>Duplicate of<input type=\"number\" name=\"duplicate_of_id\" min=\"1\"></label>");
+        try writer.writeAll("<label>Duplicate of<input type=\"number\" name=\"duplicate_of_id\" min=\"1\" value=\"");
+        if (issue.duplicate_of_id) |target| try writer.print("{d}", .{target});
+        try writer.writeAll("\"></label>");
         try writer.print("<a class=\"button button-quiet\" href=\"/admin/issues/{d}/edit\">Edit</a>", .{issue.id});
         try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Save</button></form>");
     }
-    try writer.writeAll("</div></section>");
+    try writer.writeAll("</div><nav class=\"pagination\" aria-label=\"Admin feedback pages\">");
+    const page_number = @max(query.page, 1);
+    if (page_number > 1) {
+        try writer.print("<a class=\"button button-quiet\" href=\"/admin?page={d}\">← Previous</a>", .{page_number - 1});
+    }
+    if (@as(i64, page_number) * 20 < result.total) {
+        try writer.print("<a class=\"button button-quiet\" href=\"/admin?page={d}\">Next →</a>", .{page_number + 1});
+    }
+    try writer.writeAll("</nav></section>");
 }
 
 fn renderBoards(
