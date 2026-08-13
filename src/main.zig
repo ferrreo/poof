@@ -28,6 +28,12 @@ pub fn main(init: std.process.Init) void {
         std.log.err("application security startup failed: {s}", .{@errorName(problem)});
         std.process.exit(78);
     };
+    if (config.rustfs) |rustfs| {
+        poof.s3.ensureBucket(init.io, init.gpa, rustfs.storage()) catch |problem| {
+            std.log.err("RustFS bucket setup failed: {s}", .{@errorName(problem)});
+            std.process.exit(69);
+        };
+    }
 
     runner.runOrExit(&state, .{
         .listener = .{ .address = .{ .ipv4 = .{

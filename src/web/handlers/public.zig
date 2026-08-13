@@ -865,6 +865,7 @@ fn renderDiscussion(
     try writer.writeAll(hidden);
     try writer.writeAll("<label for=\"comment-body\">Add to the conversation <span class=\"hint\">Markdown and ![alt](https://...) images</span></label>");
     try writer.writeAll("<textarea id=\"comment-body\" name=\"body\" required maxlength=\"4096\" rows=\"5\"></textarea>");
+    try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Post comment</button></form></section>");
 }
 
@@ -934,13 +935,15 @@ fn renderIssueForm(
     try writer.writeAll("</select></label></div>");
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" placeholder=\"A concise summary\"></label>");
     try writer.writeAll("<label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve?\"></textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<fieldset class=\"bug-fields\" data-bug-fields><legend>Bug details</legend>");
     try writer.writeAll("<label>Steps to reproduce<textarea name=\"reproduction_steps\" maxlength=\"8192\" rows=\"5\"></textarea></label>");
     try writer.writeAll("<label>Expected behavior<textarea name=\"expected_behavior\" maxlength=\"8192\" rows=\"3\"></textarea></label>");
     try writer.writeAll("<label>Actual behavior<textarea name=\"actual_behavior\" maxlength=\"8192\" rows=\"3\"></textarea></label>");
     try writer.writeAll("<label>Environment and version<textarea name=\"environment\" maxlength=\"8192\" rows=\"3\"></textarea></label></fieldset>");
-    try writer.writeAll("<label>Evidence image or URL <span class=\"hint\">optional https link; image URLs preview on the issue</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" placeholder=\"https://.../screenshot.png\"></label>");
-    try writer.writeAll("<div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/\">Cancel</a>");
+    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" placeholder=\"https://.../screenshot.png\"></label>");
+    try page.imageUploadControl(writer, .url);
+    try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/\">Cancel</a>");
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Submit feedback</button></div></form></section>");
 }
 

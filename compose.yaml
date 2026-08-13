@@ -16,5 +16,26 @@ services:
       timeout: 3s
       retries: 20
 
+  rustfs:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    command: ["/data"]
+    environment:
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: ${POOF_RUSTFS_ACCESS_KEY:-poofadmin}
+      RUSTFS_SECRET_KEY: ${POOF_RUSTFS_SECRET_KEY:-poofadmin-dev-secret-key-change}
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - poof-rustfs:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   poof-postgres:
+  poof-rustfs:

@@ -623,6 +623,7 @@ fn tryRenderIssueContentForm(
     try writer.writeAll("\"></label><label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"10\">");
     try highlight.escapeHtml(writer, issue.body_markdown);
     try writer.writeAll("</textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
     if (issue.kind == .bug) {
         try writer.writeAll("<div class=\"form-row\"><label>Steps to reproduce<textarea name=\"reproduction_steps\" required maxlength=\"8192\" rows=\"5\">");
         try optionalText(writer, issue.reproduction_steps);
@@ -634,9 +635,11 @@ fn tryRenderIssueContentForm(
         try optionalText(writer, issue.environment);
         try writer.writeAll("</textarea></label></div>");
     }
-    try writer.writeAll("<label>Evidence image or URL <span class=\"hint\">https link; image URLs preview on the public issue</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
+    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
     try optionalText(writer, issue.evidence_url);
-    try writer.writeAll("\"></label><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+    try writer.writeAll("\"></label>");
+    try page.imageUploadControl(writer, .url);
+    try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
 }
 
 fn renderBranding(
@@ -651,9 +654,11 @@ fn renderBranding(
     try highlight.escapeHtml(writer, branding.company_name);
     try writer.writeAll("\"></label><label>Tagline<input name=\"tagline\" maxlength=\"200\" value=\"");
     try highlight.escapeHtml(writer, branding.tagline);
-    try writer.writeAll("\"></label><label>Logo URL <span class=\"hint\">optional https image link</span><input type=\"url\" name=\"logo_url\" maxlength=\"512\" placeholder=\"https://.../logo.png\" value=\"");
+    try writer.writeAll("\"></label><div class=\"upload-field\"><label>Logo URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"logo_url\" maxlength=\"512\" placeholder=\"https://.../logo.png\" value=\"");
     try optionalText(writer, branding.logo_url);
     try writer.writeAll("\"></label>");
+    try page.imageUploadControl(writer, .url);
+    try writer.writeAll("</div>");
     if (branding.logo_url) |logo| {
         try writer.writeAll("<p class=\"branding-preview\"><img class=\"brand-logo\" src=\"");
         try highlight.escapeHtml(writer, logo);
@@ -710,6 +715,7 @@ fn renderChangelogs(
     try writer.writeAll("<label>Completed issue IDs <span class=\"hint\">optional, comma separated</span><input name=\"issue_ids\" maxlength=\"500\" placeholder=\"42, 57\"></label>");
     try writer.writeAll("<label>Summary<input name=\"summary\" required maxlength=\"500\"></label>");
     try writer.writeAll("<label>Release notes <span class=\"hint\">Markdown, fenced code, and ![alt](https://...) images</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"10\" placeholder=\"What shipped?\"></textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<div class=\"form-actions\"><button class=\"button button-primary\" type=\"submit\">Save draft</button></div></form></section>");
 }
 
@@ -740,7 +746,9 @@ fn renderChangelogEditForm(
     try highlight.escapeHtml(writer, entry.summary);
     try writer.writeAll("\"></label><label>Release notes <span class=\"hint\">Markdown, fenced code, and ![alt](https://...) images</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"12\">");
     try highlight.escapeHtml(writer, entry.body_markdown);
-    try writer.writeAll("</textarea></label><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin#changelog\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+    try writer.writeAll("</textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
+    try writer.writeAll("<div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin#changelog\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
 }
 
 fn formOptions(comptime bytes: u64, comptime segments: u16) ploof.Form.Options {

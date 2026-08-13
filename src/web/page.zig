@@ -138,6 +138,26 @@ pub fn looksLikeImageUrl(url: []const u8) bool {
     return false;
 }
 
+/// File picker that POSTs to `/uploads` and fills a URL input or Markdown textarea.
+pub fn imageUploadControl(
+    writer: *std.Io.Writer,
+    comptime mode: enum { url, markdown },
+) std.Io.Writer.Error!void {
+    const label = switch (mode) {
+        .url => "Upload image",
+        .markdown => "Insert image",
+    };
+    const mode_attr = switch (mode) {
+        .url => "url",
+        .markdown => "markdown",
+    };
+    try writer.print(
+        \\<label class="button button-quiet upload-trigger">{s}<input class="sr-only" type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-image-upload="{s}"></label><p class="hint upload-status" data-upload-status hidden></p>
+    ,
+        .{ label, mode_attr },
+    );
+}
+
 fn navLink(
     writer: *std.Io.Writer,
     href: []const u8,

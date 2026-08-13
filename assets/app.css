@@ -1303,6 +1303,24 @@ input[type="checkbox"] {
   font-weight: 400;
 }
 
+.upload-field {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.upload-trigger {
+  justify-self: start;
+  cursor: pointer;
+}
+
+.upload-status {
+  margin: 0;
+}
+
+.upload-status-error {
+  color: var(--color-danger, #b42318);
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
