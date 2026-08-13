@@ -1,0 +1,27 @@
+{
+  "scopeName": "source.fixture",
+  "patterns": [
+    {
+      "name": "keyword.control.fixture",
+      "match": "\\bif\\b"
+    }
+  ],
+  "injections": {
+    "L:source.other": {
+      "patterns": [
+        {
+          "name": "constant.numeric.fixture",
+          "match": "[0-9]+"
+        }
+      ]
+    },
+    "R:source.fixture": {
+      "patterns": [
+        {
+          "name": "string.quoted.fixture",
+          "match": "ok"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "shiki": "node --expose-gc shiki.mjs",
+    "vscode-textmate": "node --expose-gc vscode_textmate.mjs",
+    "wasm": "node --expose-gc wasm.mjs",
+    "tree-sitter": "node tree_sitter.mjs",
+    "diff:native": "node differential_native.mjs",
+    "visual": "node visual_compare.mjs",
+    "check:cases": "node check_cases.mjs",
+    "check:onig-cases": "node check_oniguruma_cases.mjs && cargo run --manifest-path syntect/Cargo.toml --bin zhl-onig-cases --release",
+    "check:shiki-ecosystem": "node shiki_ecosystem.mjs",
+    "esm:wasm": "node esm_bench.mjs wasm",
+    "esm:node-ffi": "node --experimental-ffi esm_bench.mjs node-ffi",
+    "esm:shiki": "node esm_bench.mjs shiki",
+    "browser:shiki-bundle": "bun build benchmark/browser/shiki_entry.js --target=browser --minify --outfile=benchmark/browser/shiki_bundle.js"
+  },
+  "dependencies": {
+    "@shikijs/engine-oniguruma": "^4.3.0",
+    "@shikijs/vscode-textmate": "^10.0.2",
+    "shiki": "^4.3.0"
+  },
+  "devDependencies": {
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-javascript": "^0.25.0"
+  }
+}

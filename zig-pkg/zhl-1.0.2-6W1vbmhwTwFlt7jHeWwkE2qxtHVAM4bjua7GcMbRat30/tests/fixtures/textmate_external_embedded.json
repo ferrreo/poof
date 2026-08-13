@@ -1,0 +1,7 @@
+{
+  "scopeName": "source.embedded",
+  "patterns": [
+    { "name": "keyword.control.embedded", "match": "\\bif\\b" },
+    { "name": "constant.numeric.embedded", "match": "[0-9]+" }
+  ]
+}

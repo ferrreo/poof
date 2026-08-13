@@ -1,0 +1,12 @@
+grammar "text.xml" {
+    name "es-tag-xml";
+    scope root = "text.xml";
+    context main {
+        block_comment "<!--" "-->" scope "comment.block.xml";
+        block_comment "<![CDATA[" "]]>" scope "string.unquoted.cdata.xml";
+        string "\"" escape "\\" scope "string.quoted.double.xml";
+        string "'" escape "\\" scope "string.quoted.single.xml";
+        identifier_before "=" scope "variable.other.field.xml";
+        operators "</ /> < > / = ? ! [ ]" scope "punctuation.separator.xml";
+    }
+}

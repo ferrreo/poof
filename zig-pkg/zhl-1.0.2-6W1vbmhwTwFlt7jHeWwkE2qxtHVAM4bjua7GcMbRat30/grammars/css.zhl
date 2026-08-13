@@ -1,0 +1,19 @@
+grammar "source.css" {
+    name "CSS";
+    scope root = "source.css";
+
+    context main {
+        block_comment "/*" "*/" scope "comment.block.css";
+        string "\"" escape "\\" scope "string.quoted.double.css";
+        string "'" escape "\\" scope "string.quoted.single.css";
+        regex "@[a-zA-Z][a-zA-Z0-9-]*" scope "keyword.control.at-rule.css";
+        regex "!important" scope "keyword.other.important.css";
+        number generic scope "constant.numeric.css";
+        identifier_before ":" scope "support.type.property-name.css";
+        function_call scope "support.function.css";
+        keywords "inherit initial unset revert none auto block inline flex grid" scope "keyword.other.css";
+        operators "{ } ( ) [ ] : ; , > + ~ = * /" scope "punctuation.css";
+        operators ". # " scope "punctuation.css";
+        regex "[a-zA-Z_][a-zA-Z0-9_-]*" scope "entity.name.tag.css";
+    }
+}

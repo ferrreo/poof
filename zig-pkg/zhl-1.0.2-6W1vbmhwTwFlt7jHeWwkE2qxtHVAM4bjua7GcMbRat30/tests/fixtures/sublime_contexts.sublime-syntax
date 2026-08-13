@@ -1,0 +1,24 @@
+%YAML 1.2
+---
+name: Context Fixture
+scope: source.context-fixture
+contexts:
+  main:
+    - include: keywords
+    - match: '"'
+      scope: string.quoted.fixture
+      push: string
+    - match: <script>
+      scope: string.quoted.fixture
+      embed: script
+      escape: </script>
+  keywords:
+    - match: \b(if|else|return)\b
+      scope: keyword.control.fixture
+  string:
+    - match: '"'
+      scope: string.quoted.fixture
+      pop: true
+  script:
+    - match: \b(if|else)\b
+      scope: keyword.control.fixture

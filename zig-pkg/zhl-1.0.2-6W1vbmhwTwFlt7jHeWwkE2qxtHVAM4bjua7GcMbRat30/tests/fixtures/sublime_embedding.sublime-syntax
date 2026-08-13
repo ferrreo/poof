@@ -1,0 +1,24 @@
+%YAML 1.2
+---
+name: Embedding Fixture
+scope: text.embedding-fixture
+contexts:
+  main:
+    - match: <script>
+      scope: punctuation.section.embedded.begin.embedding-fixture
+      embed: script
+      escape: </script>
+    - match: '"'
+      scope: string.quoted.double.embedding-fixture
+      push: string
+  string:
+    - match: \\.
+      scope: constant.character.escape.embedding-fixture
+    - match: '"'
+      scope: string.quoted.double.embedding-fixture
+      pop: true
+  script:
+    - match: \b(if|else|return)\b
+      scope: keyword.control.embedding-fixture
+    - match: '[0-9]+'
+      scope: constant.numeric.integer.embedding-fixture

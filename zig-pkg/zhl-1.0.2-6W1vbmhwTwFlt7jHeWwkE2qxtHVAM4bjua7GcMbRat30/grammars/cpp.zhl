@@ -1,0 +1,21 @@
+grammar "source.cpp" {
+    name "C++";
+    scope root = "source.cpp";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.cpp";
+        block_comment "/*" "*/" scope "comment.block.cpp";
+        string "\"" escape "\\" scope "string.quoted.double.cpp";
+        char "'" escape "\\" scope "constant.character.cpp";
+        number generic scope "constant.numeric.cpp";
+        regex "#\\s*[A-Za-z_][A-Za-z0-9_]*" scope "keyword.control.directive.cpp";
+        keywords "alignas alignof asm break case catch class co_await co_return co_yield concept consteval constexpr constinit continue default delete do else enum explicit export extern for friend goto if import module namespace new noexcept operator private protected public requires return sizeof static_assert struct switch template throw try typedef typename union using virtual while" scope "keyword.control.cpp";
+        keywords "auto bool char char8_t char16_t char32_t const double float inline int long mutable nullptr short signed static unsigned void volatile wchar_t true false" scope "storage.type.cpp";
+        function_call scope "entity.name.function.cpp";
+        capitalized_identifier scope "entity.name.type.cpp";
+        identifier_before "." scope "variable.other.field.cpp";
+        identifier_after "." scope "variable.other.field.cpp";
+        operators ":: -> .* ->* ++ -- <= >= == != && || << >> += -= *= /= %= &= |= ^= <<= >>= <=> ..." scope "keyword.operator.cpp";
+        operators "+ - * / % = < > & | ^ ~ ! ? : ; , . { } ( ) [ ]" scope "keyword.operator.cpp";
+    }
+}

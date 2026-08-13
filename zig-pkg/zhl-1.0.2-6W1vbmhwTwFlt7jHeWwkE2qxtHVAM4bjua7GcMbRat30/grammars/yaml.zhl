@@ -1,0 +1,17 @@
+grammar "source.yaml" {
+    name "YAML";
+    scope root = "source.yaml";
+
+    context main {
+        line_comment "#" scope "comment.line.number-sign.yaml";
+        quoted_key_before ":" scope "meta.mapping.key.yaml";
+        identifier_before ":" scope "meta.mapping.key.yaml";
+        string "\"" escape "\\" scope "string.quoted.double.yaml";
+        string "'" escape "\\" scope "string.quoted.single.yaml";
+        number generic scope "constant.numeric.yaml";
+        keywords "true false null yes no on off" scope "constant.language.yaml";
+        identifier_after ":" scope "string.unquoted.plain.yaml";
+        identifier_after "-" scope "string.unquoted.plain.yaml";
+        operators "--- ... : - [ ] { } , | >" scope "punctuation.separator.yaml";
+    }
+}

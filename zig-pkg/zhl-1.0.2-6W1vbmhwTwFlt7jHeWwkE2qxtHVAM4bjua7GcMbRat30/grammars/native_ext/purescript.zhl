@@ -1,0 +1,16 @@
+grammar "source.purescript" {
+    name "purescript";
+    scope root = "source.purescript";
+    context main {
+        line_comment "--" scope "comment.line.double-dash.purescript";
+        block_comment "{-" "-}" nested scope "comment.block.purescript";
+        string "\"" escape "\\" scope "string.quoted.double.purescript";
+        char "'" escape "\\" scope "constant.character.purescript";
+        number generic scope "constant.numeric.purescript";
+        keywords "ado as case class data derive do else false forall foreign hiding if import in infix infixl infixr instance let module newtype nominal of phantom role then true type where" scope "keyword.control.purescript";
+        keywords "Array Boolean Char Int Number Record String Unit" scope "support.type.primitive.purescript";
+        capitalized_identifier scope "entity.name.type.purescript";
+        function_call scope "entity.name.function.purescript";
+        operators ":: -> => <- <= >= == /= && || <$> <*> >>= = << >> + - * / % < > & | ^ ~ ! ? : ; , . { } ( ) [ ]" scope "keyword.operator.purescript";
+    }
+}

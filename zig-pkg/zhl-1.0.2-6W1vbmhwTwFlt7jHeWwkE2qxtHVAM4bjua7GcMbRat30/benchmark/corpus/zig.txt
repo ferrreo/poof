@@ -1,0 +1,21 @@
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+pub const Thing = struct {
+    name: []const u8,
+    count: u32 = 0,
+    values: []const u64 = &.{ 1, 2, 3, 5, 8, 13 },
+    pub fn render(self: Thing, writer: anytype) !void {
+        try writer.print("name={s} count={d}\n", .{ self.name, self.count });
+    }
+};
+pub fn main() !void {
+    var value: u32 = 0x1f + 42;
+    const thing = Thing{ .name = "zhl", .count = value };
+    const json = "{\"items\":[1,2,3],\"enabled\":true,\"name\":\"zhl\"}";
+    const script = "function test(x){return x?.value ?? 42;}";
+    while (value < 1000) : (value += 1) {
+        std.debug.print("value={d} json={s} script={s}\n", .{ value, json, script });
+    }
+    // benchmark comment with URL https://example.test/path?q=zig&case=bench
+    if (thing.values.len > 0 and value != 0) return;
+}

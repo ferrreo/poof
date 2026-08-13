@@ -1,0 +1,18 @@
+grammar "source.c" {
+    name "C";
+    scope root = "source.c";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.c";
+        block_comment "/*" "*/" scope "comment.block.c";
+        string "\"" escape "\\" scope "string.quoted.double.c";
+        char "'" escape "\\" scope "constant.character.c";
+        number generic scope "constant.numeric.c";
+        keywords "break case continue default do else for goto if return switch while" scope "keyword.control.c";
+        keywords "auto const enum extern inline register restrict signed sizeof static struct typedef union" scope "storage.type.c";
+        keywords "unsigned volatile void char short int long float double bool true false NULL" scope "storage.type.c";
+        function_call scope "entity.name.function.c";
+        operators "-> ++ -- <= >= == != && || << >> += -= *= /= %= &= |= ^= !" scope "keyword.operator.c";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.c";
+    }
+}

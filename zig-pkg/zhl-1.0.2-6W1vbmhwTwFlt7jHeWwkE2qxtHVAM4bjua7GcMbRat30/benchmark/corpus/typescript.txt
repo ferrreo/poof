@@ -1,0 +1,22 @@
+type User = {
+  id: string;
+  name: string;
+  active: boolean;
+  tags: string[];
+};
+
+export function renderUser(user: User, count: number): string {
+  const label = `${user.name}:${count}`;
+  const flags = user.tags.map((tag) => tag.trim()).filter(Boolean);
+  return JSON.stringify({ id: user.id, label, flags, active: user.active });
+}
+
+export class Store<T extends { id: string }> {
+  #items = new Map<string, T>();
+  set(value: T): void { this.#items.set(value.id, value); }
+  get(id: string): T | undefined { return this.#items.get(id); }
+}
+
+const store = new Store<User>();
+store.set({ id: "u1", name: "zhl", active: true, tags: ["fast", "native"] });
+console.log(renderUser(store.get("u1")!, 42));

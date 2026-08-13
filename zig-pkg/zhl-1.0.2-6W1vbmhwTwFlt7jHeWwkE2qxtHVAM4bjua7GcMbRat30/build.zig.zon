@@ -1,0 +1,19 @@
+.{
+    .name = .zhl,
+    .version = "1.0.2",
+    .fingerprint = 0x4f07f8486e6f6de9,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "grammars",
+        "tests",
+        "tools",
+        "benchmark",
+        "docs",
+        "README.md",
+        "LICENSE",
+    },
+}

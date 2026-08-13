@@ -1,0 +1,15 @@
+grammar "source.prolog" {
+    name "prolog";
+    scope root = "source.prolog";
+    context main {
+        line_comment "%" scope "comment.line.percentage.prolog";
+        block_comment "/*" "*/" scope "comment.block.prolog";
+        string "\"" escape "\\" scope "string.quoted.double.prolog";
+        string "'" escape "\\" scope "string.quoted.single.prolog";
+        number generic scope "constant.numeric.prolog";
+        keywords "as catch fail false forall if is mod module not once repeat true use_module when" scope "keyword.control.prolog";
+        capitalized_identifier scope "variable.other.prolog";
+        function_call scope "entity.name.function.prolog";
+        operators ":- --> -> *-> =.. =:= =\\= == \\== @< @=< @> @>= =< >= \\+ + - * / // ^ ** < > = ; , . : | ! ( ) [ ] { }" scope "keyword.operator.prolog";
+    }
+}

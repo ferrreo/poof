@@ -1,0 +1,22 @@
+grammar "source.zig" {
+    name "Zig 0.16";
+    scope root = "source.zig";
+
+    context main {
+        line_comment "///" scope "comment.line.documentation.zig";
+        line_comment "//!" scope "comment.line.documentation.container.zig";
+        line_comment "//" scope "comment.line.double-slash.zig";
+        string "\"" escape "\\" scope "string.quoted.double.zig";
+        char "'" escape "\\" scope "constant.character.zig";
+        multiline_prefix "\\\\" scope "string.quoted.multiline.zig";
+        builtin_prefix "@" scope "support.function.builtin.zig";
+        number generic scope "constant.numeric.zig";
+        keywords "addrspace align allowzero and anyframe anytype asm break callconv catch comptime const" scope "keyword.control.zig";
+        keywords "continue defer else enum errdefer error export extern fn for if inline noalias opaque or" scope "keyword.control.zig";
+        keywords "orelse packed pub return struct switch test threadlocal try union var volatile while" scope "keyword.control.zig";
+        keywords "bool void noreturn type anyerror anyopaque undefined null true false" scope "constant.language.zig";
+        operators "<<|= >>= <<= *%= +%= -%= .* ... ** ++ +% -% *% -> << >> <= >=" scope "keyword.operator.zig";
+        operators "== != => || + - * / % = < > ! & | ^ ~ ? . : ; , { } ( ) [ ]" scope "keyword.operator.zig";
+        function_call scope "entity.name.function.zig";
+    }
+}

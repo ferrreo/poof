@@ -1,0 +1,5 @@
+const ploof = @import("ploof_compile").ploof;
+
+comptime {
+    _ = ploof.TrustedResourceUrl.literal("javascript:alert(1)");
+}

@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ploof — TechEmpower Round 23 same-host report</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d10;
+      --panel: #13171c;
+      --panel-2: #191e24;
+      --line: #29313a;
+      --text: #eef2f5;
+      --muted: #9ba7b4;
+      --cyan: #68e0cf;
+      --amber: #ffc46b;
+      --red: #ff7b7b;
+      --blue: #7bb7ff;
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 82% 0%, rgba(104, 224, 207, .12), transparent 28rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    a { color: var(--cyan); }
+    header, main, footer { width: min(calc(100% - 32px), var(--max)); margin-inline: auto; }
+    header { padding: 72px 0 38px; }
+    .eyebrow { color: var(--cyan); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: 12px 0 16px; font: 700 clamp(35px, 6vw, 72px)/1.02 system-ui, sans-serif; letter-spacing: -.055em; }
+    h2 { margin: 0 0 18px; font: 650 24px/1.2 system-ui, sans-serif; letter-spacing: -.02em; }
+    h3 { margin: 0 0 9px; font: 650 16px/1.3 system-ui, sans-serif; }
+    p { margin: 0 0 14px; }
+    .lede { max-width: 850px; color: #c4cdd5; font: 19px/1.55 system-ui, sans-serif; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-top: 28px; color: var(--muted); font-size: 12px; }
+    section { margin: 0 0 28px; padding: 26px; border: 1px solid var(--line); border-radius: 14px; background: rgba(19, 23, 28, .94); }
+    .notice { border-left: 4px solid var(--amber); background: linear-gradient(90deg, rgba(255, 196, 107, .08), var(--panel) 42%); }
+    .notice strong { color: var(--amber); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card { min-height: 126px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+    .card .label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .card .value { margin: 10px 0 3px; font: 700 clamp(22px, 3.2vw, 34px)/1 system-ui, sans-serif; letter-spacing: -.04em; }
+    .card .note { color: var(--muted); font-size: 12px; }
+    .good { color: var(--cyan); }
+    .warn { color: var(--amber); }
+    .bad { color: var(--red); }
+    .coverage { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .coverage .card { min-height: 106px; padding: 14px; }
+    .status { display: inline-block; margin-top: 8px; padding: 3px 7px; border-radius: 999px; font-size: 10px; text-transform: uppercase; }
+    .complete { color: var(--cyan); background: rgba(104, 224, 207, .12); }
+    .missing { color: var(--muted); background: rgba(155, 167, 180, .12); }
+    .table-wrap { overflow-x: auto; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { padding: 10px 9px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+    td.num, th.num { text-align: right; }
+    tr.ours { color: var(--cyan); background: rgba(104, 224, 207, .07); }
+    tr.unavailable { color: var(--muted); }
+    .bar { width: 170px; height: 8px; overflow: hidden; border-radius: 999px; background: #232a32; }
+    .bar > span { display: block; height: 100%; border-radius: inherit; background: var(--blue); }
+    tr.ours .bar > span { background: var(--cyan); }
+    code, pre { font: inherit; }
+    pre { overflow-x: auto; margin: 14px 0 0; padding: 15px; border: 1px solid var(--line); border-radius: 9px; background: #090b0e; color: #d7dfe6; }
+    dl { display: grid; grid-template-columns: 205px 1fr; gap: 8px 18px; margin: 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; }
+    ul, ol { margin: 9px 0 0; padding-left: 22px; }
+    li + li { margin-top: 7px; }
+    .footnote { color: var(--muted); font-size: 12px; }
+    .priority { margin-top: 14px; padding: 18px; border-left: 3px solid var(--blue); background: var(--panel-2); }
+    .priority:first-of-type { border-left-color: var(--red); }
+    .target { color: var(--amber); }
+    footer { padding: 8px 0 54px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 900px) {
+      .cards, .coverage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      header { padding-top: 44px; }
+      section { padding: 20px; }
+      .grid, .cards, .coverage { grid-template-columns: 1fr; }
+      dl { grid-template-columns: 1fr; gap: 2px; }
+      dd + dt { margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Ploof performance report / 30 July 2026</div>
+    <h1>JSON gains 74.6%; plaintext gains 103.7%. The clear lead remains open.</h1>
+    <p class="lede">Remaining hot-path issues were profiled, fixed, and measured without relaxing Ploof's bounded-memory or HTTP rules. Final ReleaseFast medians are 1.987M JSON and 2.107M pipelined plaintext requests per second: ninth of nine runnable JSON entries and eleventh of eleven plaintext entries.</p>
+    <div class="meta">
+      <span>base revision dfe29652eeff + optimized working tree</span>
+      <span>FrameworkBenchmarks 523534bb6145</span>
+      <span>Zig 0.16.0 · ReleaseFast server</span>
+      <span>median of 3 × 15 s confirmations</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="notice">
+      <h2>Verdict</h2>
+      <p><strong>No performance lead can be claimed.</strong> Ploof trails the recorded same-host JSON leader by 17.6% and the plaintext leader by 90.6%. Exact benchmark capacities and used-range decoder reset removed the dominant per-request clearing cost. A true copied wire-batch prototype regressed plaintext by 3.1% and was reverted; the retained direct-send burst still performs one syscall per response.</p>
+      <p>These are engineering comparisons, not official TechEmpower ranks. Client and server share one desktop, multiple unrelated background processes consumed CPU, and Round 23's official run used three dedicated 56-core machines. Same-host execution is useful for finding large gaps; official placement still requires TechEmpower infrastructure.</p>
+    </section>
+
+    <section>
+      <h2>Result snapshot</h2>
+      <div class="grid cards">
+        <div class="card">
+          <div class="label">Ploof JSON</div>
+          <div class="value">1,987,026</div>
+          <div class="note">req/s · rank 9/9 runnable</div>
+        </div>
+        <div class="card">
+          <div class="label">JSON gap</div>
+          <div class="value bad">−17.6%</div>
+          <div class="note">leader: libreactor-server</div>
+        </div>
+        <div class="card">
+          <div class="label">Ploof plaintext</div>
+          <div class="value">2,106,609</div>
+          <div class="note">req/s · rank 11/11</div>
+        </div>
+        <div class="card">
+          <div class="label">Plaintext gap</div>
+          <div class="value bad">−90.6%</div>
+          <div class="note">leader: silverlining-prefork</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Benchmark coverage</h2>
+      <div class="grid coverage">
+        <div class="card"><h3>JSON</h3><span class="status complete">implemented</span></div>
+        <div class="card"><h3>Plaintext</h3><span class="status complete">implemented</span></div>
+        <div class="card"><h3>Single query</h3><span class="status missing">absent</span></div>
+        <div class="card"><h3>Multiple queries</h3><span class="status missing">absent</span></div>
+        <div class="card"><h3>Fortunes</h3><span class="status missing">absent</span></div>
+        <div class="card"><h3>Updates</h3><span class="status missing">absent</span></div>
+        <div class="card"><h3>Cached queries</h3><span class="status missing">absent</span></div>
+      </div>
+      <p class="footnote" style="margin-top:14px">Ploof currently participates only in JSON and plaintext. Database and cache categories were not faked: the repository has no production PostgreSQL driver, bounded pool, or compliant cache integration.</p>
+    </section>
+
+    <section>
+      <h2>Same-host JSON results</h2>
+      <p>Eight of Round 23's top ten configurations could be rebuilt. Two EDAP variants are listed as unavailable instead of silently omitted. Ploof used c512, selected by a c16–512 sweep.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Measured rank</th><th>Implementation</th><th class="num">Median RPS</th><th class="num">vs leader</th><th class="num">Connections</th><th>Relative</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>libreactor-server</td><td class="num">2,411,764</td><td class="num">—</td><td class="num">512</td><td><div class="bar"><span style="width:100%"></span></div></td></tr>
+            <tr><td>2</td><td>xitca-web-unrealistic</td><td class="num">2,407,959</td><td class="num">−0.2%</td><td class="num">512</td><td><div class="bar"><span style="width:99.8%"></span></div></td></tr>
+            <tr><td>3</td><td>lithium</td><td class="num">2,404,281</td><td class="num">−0.3%</td><td class="num">32</td><td><div class="bar"><span style="width:99.7%"></span></div></td></tr>
+            <tr><td>4</td><td>wizzardo-http</td><td class="num">2,395,377</td><td class="num">−0.7%</td><td class="num">32</td><td><div class="bar"><span style="width:99.3%"></span></div></td></tr>
+            <tr><td>5</td><td>may-minihttp</td><td class="num">2,390,324</td><td class="num">−0.9%</td><td class="num">32</td><td><div class="bar"><span style="width:99.1%"></span></div></td></tr>
+            <tr><td>6</td><td>firenio-http-lite</td><td class="num">2,356,550</td><td class="num">−2.3%</td><td class="num">32</td><td><div class="bar"><span style="width:97.7%"></span></div></td></tr>
+            <tr><td>7</td><td>libreactor</td><td class="num">2,338,837</td><td class="num">−3.0%</td><td class="num">32</td><td><div class="bar"><span style="width:97.0%"></span></div></td></tr>
+            <tr><td>8</td><td>pico.v</td><td class="num">2,189,392</td><td class="num">−9.2%</td><td class="num">32</td><td><div class="bar"><span style="width:90.8%"></span></div></td></tr>
+            <tr class="ours"><td>9</td><td>Ploof after</td><td class="num">1,987,026</td><td class="num">−17.6%</td><td class="num">512</td><td><div class="bar"><span style="width:82.4%"></span></div></td></tr>
+            <tr class="unavailable"><td>—</td><td>edap-http-fast</td><td class="num">unavailable</td><td class="num">—</td><td class="num">—</td><td>deleted SNAPSHOT dependency</td></tr>
+            <tr class="unavailable"><td>—</td><td>edap-http</td><td class="num">unavailable</td><td class="num">—</td><td class="num">—</td><td>deleted SNAPSHOT dependency</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote" style="margin-top:12px">Ploof after: 2,196,994 · 1,987,026 · 1,954,775 req/s. Median 1,987,026; +74.61% from the recorded 1,137,962 baseline; zero reported socket or HTTP-status errors. Median latency values: p50 119 µs and p99 8.69 ms.</p>
+    </section>
+
+    <section>
+      <h2>Same-host plaintext results</h2>
+      <p>All Round 23 top-ten plaintext configurations were rebuilt and run. Ploof used c4096 and pipeline depth 16, selected by c256–16384 sweep. The top ten cluster near this single-host client's kernel/load ceiling; Ploof does not.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Measured rank</th><th>Implementation</th><th class="num">Median RPS</th><th class="num">vs leader</th><th class="num">Connections</th><th>Relative</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>silverlining-prefork</td><td class="num">22,351,296</td><td class="num">—</td><td class="num">1,024</td><td><div class="bar"><span style="width:100%"></span></div></td></tr>
+            <tr><td>2</td><td>xitca-web-unrealistic</td><td class="num">22,349,780</td><td class="num">−0.0%</td><td class="num">1,024</td><td><div class="bar"><span style="width:100%"></span></div></td></tr>
+            <tr><td>3</td><td>MrHTTP</td><td class="num">22,345,983</td><td class="num">−0.0%</td><td class="num">1,024</td><td><div class="bar"><span style="width:100%"></span></div></td></tr>
+            <tr><td>4</td><td>uWebSockets.js</td><td class="num">22,320,118</td><td class="num">−0.1%</td><td class="num">1,024</td><td><div class="bar"><span style="width:99.9%"></span></div></td></tr>
+            <tr><td>5</td><td>lithium</td><td class="num">22,294,561</td><td class="num">−0.3%</td><td class="num">1,024</td><td><div class="bar"><span style="width:99.7%"></span></div></td></tr>
+            <tr><td>6</td><td>libreactor</td><td class="num">22,278,521</td><td class="num">−0.3%</td><td class="num">1,024</td><td><div class="bar"><span style="width:99.7%"></span></div></td></tr>
+            <tr><td>7</td><td>libreactor-server</td><td class="num">22,218,260</td><td class="num">−0.6%</td><td class="num">1,024</td><td><div class="bar"><span style="width:99.4%"></span></div></td></tr>
+            <tr><td>8</td><td>may-minihttp</td><td class="num">22,183,675</td><td class="num">−0.8%</td><td class="num">1,024</td><td><div class="bar"><span style="width:99.2%"></span></div></td></tr>
+            <tr><td>9</td><td>faf</td><td class="num">22,034,263</td><td class="num">−1.4%</td><td class="num">1,024</td><td><div class="bar"><span style="width:98.6%"></span></div></td></tr>
+            <tr><td>10</td><td>pico.v</td><td class="num">20,487,593</td><td class="num">−8.3%</td><td class="num">1,024</td><td><div class="bar"><span style="width:91.7%"></span></div></td></tr>
+            <tr class="ours"><td>11</td><td>Ploof after</td><td class="num">2,106,609</td><td class="num">−90.6%</td><td class="num">4,096</td><td><div class="bar"><span style="width:9.4%"></span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote" style="margin-top:12px">Ploof after: 2,194,992 · 1,913,469 · 2,106,609 req/s. Median 2,106,609; +103.68% from the recorded 1,034,272 baseline; zero reported socket or HTTP-status errors. Median latency values: p50 890 µs and p99 8.48 ms.</p>
+    </section>
+
+    <section>
+      <h2>All confirmation runs</h2>
+      <p>Requests per second, as printed by wrk. Median is the comparison value above; no best-run cherry-picking.</p>
+      <h3>JSON</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Implementation</th><th class="num">Run 1</th><th class="num">Run 2</th><th class="num">Run 3</th><th class="num">Median</th></tr></thead>
+          <tbody>
+            <tr><td>libreactor-server</td><td class="num">2,499,337</td><td class="num">2,411,764</td><td class="num">2,403,200</td><td class="num">2,411,764</td></tr>
+            <tr><td>xitca-web-unrealistic</td><td class="num">2,457,290</td><td class="num">2,396,804</td><td class="num">2,407,959</td><td class="num">2,407,959</td></tr>
+            <tr><td>lithium</td><td class="num">2,340,936</td><td class="num">2,404,281</td><td class="num">2,636,215</td><td class="num">2,404,281</td></tr>
+            <tr><td>wizzardo-http</td><td class="num">2,342,227</td><td class="num">2,455,538</td><td class="num">2,395,377</td><td class="num">2,395,377</td></tr>
+            <tr><td>may-minihttp</td><td class="num">2,435,270</td><td class="num">2,315,075</td><td class="num">2,390,324</td><td class="num">2,390,324</td></tr>
+            <tr><td>firenio-http-lite</td><td class="num">2,356,550</td><td class="num">2,261,180</td><td class="num">2,385,871</td><td class="num">2,356,550</td></tr>
+            <tr><td>libreactor</td><td class="num">2,581,331</td><td class="num">2,338,837</td><td class="num">2,284,493</td><td class="num">2,338,837</td></tr>
+            <tr><td>pico.v</td><td class="num">2,189,392</td><td class="num">2,316,202</td><td class="num">2,189,135</td><td class="num">2,189,392</td></tr>
+            <tr><td>Ploof before</td><td class="num">1,136,323</td><td class="num">1,145,215</td><td class="num">1,137,962</td><td class="num">1,137,962</td></tr>
+            <tr class="ours"><td>Ploof after</td><td class="num">2,196,994</td><td class="num">1,987,026</td><td class="num">1,954,775</td><td class="num">1,987,026</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3 style="margin-top:22px">Plaintext</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Implementation</th><th class="num">Run 1</th><th class="num">Run 2</th><th class="num">Run 3</th><th class="num">Median</th></tr></thead>
+          <tbody>
+            <tr><td>silverlining-prefork</td><td class="num">23,390,795</td><td class="num">22,243,895</td><td class="num">22,351,296</td><td class="num">22,351,296</td></tr>
+            <tr><td>xitca-web-unrealistic</td><td class="num">23,405,718</td><td class="num">22,349,780</td><td class="num">22,337,467</td><td class="num">22,349,780</td></tr>
+            <tr><td>MrHTTP</td><td class="num">23,788,866</td><td class="num">22,345,983</td><td class="num">21,814,708</td><td class="num">22,345,983</td></tr>
+            <tr><td>uWebSockets.js</td><td class="num">23,593,352</td><td class="num">22,320,118</td><td class="num">22,245,441</td><td class="num">22,320,118</td></tr>
+            <tr><td>lithium</td><td class="num">23,524,435</td><td class="num">22,294,561</td><td class="num">22,279,264</td><td class="num">22,294,561</td></tr>
+            <tr><td>libreactor</td><td class="num">23,588,319</td><td class="num">22,231,153</td><td class="num">22,278,521</td><td class="num">22,278,521</td></tr>
+            <tr><td>libreactor-server</td><td class="num">23,388,974</td><td class="num">22,192,822</td><td class="num">22,218,260</td><td class="num">22,218,260</td></tr>
+            <tr><td>may-minihttp</td><td class="num">23,463,265</td><td class="num">22,183,675</td><td class="num">22,140,945</td><td class="num">22,183,675</td></tr>
+            <tr><td>faf</td><td class="num">23,489,081</td><td class="num">22,034,263</td><td class="num">22,012,184</td><td class="num">22,034,263</td></tr>
+            <tr><td>pico.v</td><td class="num">21,031,734</td><td class="num">20,487,593</td><td class="num">20,259,454</td><td class="num">20,487,593</td></tr>
+            <tr><td>Ploof before</td><td class="num">1,028,493</td><td class="num">1,041,990</td><td class="num">1,034,272</td><td class="num">1,034,272</td></tr>
+            <tr class="ours"><td>Ploof after</td><td class="num">2,194,992</td><td class="num">1,913,469</td><td class="num">2,106,609</td><td class="num">2,106,609</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Implemented contract</h2>
+      <div class="grid">
+        <div class="card">
+          <h3><code>GET /json</code></h3>
+          <p>Instantiates <code>{ message = "Hello, World!" }</code> and invokes Ploof's JSON serializer on every request. The body is not a cached JSON string.</p>
+          <p class="footnote"><code>application/json; charset=utf-8</code> · 27-byte body · dynamic serialization</p>
+        </div>
+        <div class="card">
+          <h3><code>GET /plaintext</code></h3>
+          <p>Uses a static 13-byte body and Ploof's normal HTTP response path. HTTP/1.1 keep-alive and pipeline depth 16 are exercised.</p>
+          <p class="footnote"><code>text/plain; charset=utf-8</code> · 13-byte body · no disk logging</p>
+        </div>
+      </div>
+      <p class="footnote" style="margin-top:14px">Both responses include accurate <code>Date</code>, <code>Server: Ploof</code>, and <code>Content-Length</code>. The build is libc-free. Correctness is covered by a runnable response-contract test.</p>
+    </section>
+
+    <section>
+      <h2>Hardware and method</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Same-host run</h3>
+          <dl>
+            <dt>CPU</dt><dd>AMD Ryzen 9 9950X3D, 16 cores / 32 logical CPUs</dd>
+            <dt>Topology</dt><dd>1 socket, 1 NUMA node</dd>
+            <dt>Memory</dt><dd>62 GiB visible</dd>
+            <dt>Kernel</dt><dd>Linux 7.1.4-pikaos</dd>
+            <dt>Transport</dt><dd>127.0.0.1; client and server co-located</dd>
+            <dt>Client</dt><dd>wrk 4.2.0, 8 threads, fd limit 524,288</dd>
+            <dt>Server</dt><dd>ReleaseFast, native x86_64-v3, 32 workers</dd>
+            <dt>Governor</dt><dd>powersave with boost enabled</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h3>TechEmpower Round 23</h3>
+          <dl>
+            <dt>Machines</dt><dd>Three HPE ProLiant DL360 Gen10 Plus servers</dd>
+            <dt>CPU each</dt><dd>Intel Xeon Gold 6330, 56 cores</dd>
+            <dt>Memory each</dt><dd>64 GB</dd>
+            <dt>Network</dt><dd>Mellanox ConnectX-6, 40 Gb/s Ethernet</dd>
+            <dt>Duration</dt><dd>15 seconds per level</dd>
+            <dt>Run</dt><dd>91a66052-9d86-446c-b31a-eadbd669ed08</dd>
+            <dt>Source</dt><dd>Round 23 commit 523534bb6145</dd>
+          </dl>
+        </div>
+      </div>
+      <ul>
+        <li>Each implementation received all 32 logical CPUs. wrk used 8 threads. No CPU partitioning was imposed.</li>
+        <li>Five-second sweeps selected concurrency; three fresh 15-second confirmations produced the reported median.</li>
+        <li>JSON sweep: c16, 32, 64, 128, 256, 512. Plaintext sweep: c256, 1024, 4096, 16384 with pipeline depth 16.</li>
+        <li>Top implementations used Docker images built from exact Round 23 source. Native CPU optimization was enabled where their recipes supported it.</li>
+        <li><code>may-minihttp</code> needed a Rust 1.85 builder because its unpinned 2026 dependency graph no longer compiles with Round 23's Rust 1.79 image. Application source was unchanged.</li>
+        <li><code>edap-http</code> and <code>edap-http-fast</code> could not resolve <code>io.edap:edapx-http:0.1-SNAPSHOT</code>; the artifact and public source are no longer available.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Thread and preallocation checks</h2>
+      <p>This CPU exposes 32 logical CPUs. A direct 16-versus-32 worker experiment selected 32; worker count is not guessed from physical-core count.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Workers</th><th class="num">Peak JSON sweep</th><th class="num">Peak plaintext sweep</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td>16</td><td class="num">939,791</td><td class="num">758,218</td><td>lower</td></tr>
+            <tr class="ours"><td>32</td><td class="num">1,150,072</td><td class="num">1,080,409</td><td>kept</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:16px">Final fixed capacities per worker are 128 connections, 128 request slots, 32 body workspaces, 128 × 2 KiB receive buffers, 2 KiB pipeline storage per connection, 28 response-body bytes, a 256-byte response-head workspace with 8 fields, 2 response chunks, 256 SQ entries, and 512 CQ entries. Bounds match this application's contract; framework defaults remain unchanged.</p>
+      <p class="footnote">After splitting request-body and response workspace capabilities, this response-only app starts 32 worker threads plus the main thread: 33 threads total, with no gzip decoder pool. All storage remains startup-allocated and bounded.</p>
+    </section>
+
+    <section>
+      <h2>Speed-fix execution record</h2>
+      <p>“Executed” means implemented and retained only when correct and useful, or A/B tested and reverted when measurements were negative. Keeping a regression to satisfy a checklist would make the framework slower.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Proposal</th><th>Outcome</th><th>Evidence / retained behavior</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Bounded direct-send burst</td><td class="good">retained</td><td>At most 16 direct finite sends per reactor event; partial/EAGAIN falls back to tracked io_uring send; strict request ordering remains.</td></tr>
+            <tr><td>2</td><td>Batch CQ, clock, and flush work</td><td class="warn">measured, reverted</td><td>Quick A/B: batch 64 JSON 1.043M / plain 0.890M; batch 8 JSON 1.037M / plain 0.908M; batch 1 JSON 1.047M / plain 1.004M. Existing drain path won.</td></tr>
+            <tr><td>3</td><td>Reuse keep-alive timeout</td><td class="good">retained</td><td>One in-flight timer can extend via a packed flag. Early kernel expiry rearms at logical deadline. A 20 s JSON soak completed 19,941,657 requests with zero socket errors.</td></tr>
+            <tr><td>4</td><td>Compile static response-head plan</td><td class="good">retained</td><td>Compile-time validated prefix with Date patched from worker cache; dynamic headers/CORS keep existing serializer.</td></tr>
+            <tr><td>5</td><td>Split request-body capability</td><td class="good">retained</td><td>Response JSON scratch no longer starts request gzip infrastructure; benchmark process dropped from 65 to 33 threads.</td></tr>
+            <tr><td>6</td><td>Profile and retune runtime capacities</td><td class="good">retained current bounds</td><td>32 workers beat 16; SQ/CQ 256/512 and other measured bounds stayed fastest. No speculative memory increase.</td></tr>
+            <tr><td>7</td><td>Use exact application response bounds</td><td class="good">retained</td><td>28 body bytes and a 256-byte/8-field head workspace replaced oversized defaults. Paired A/B gained 63.4% JSON and 26.6% plaintext.</td></tr>
+            <tr><td>8</td><td>Reset only used request-head storage</td><td class="good">retained</td><td>Metadata resets in place and only consumed bytes are securely wiped. Paired A/B gained 5.2% JSON and 49.1% plaintext.</td></tr>
+            <tr><td>9</td><td>Copied ordered wire coalescing</td><td class="warn">measured, reverted</td><td>Paired plaintext median regressed 3.1%; extra copying cost more than the saved calls in this topology.</td></tr>
+            <tr><td>10</td><td>Custom vector secure wipe</td><td class="warn">measured, reverted</td><td>JSON regressed 1.5% and plaintext moved +0.4% within noise. Standard <code>std.crypto.secureZero</code> remains.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote" style="margin-top:12px">Net median versus the frozen Ploof baseline: JSON +74.61%; plaintext +103.68%. Pre-fix profiling attributed 76.59% of sampled cycles to <code>memset</code> and 11.61% to <code>memcpy</code>; exact capacities and in-place reset attacked that measured root cause.</p>
+    </section>
+
+    <section>
+      <h2>Remaining work to take a clear lead</h2>
+      <p>A “clear lead” means at least 5% above the best competitor median with five or more confirmations and non-overlapping 95% confidence intervals on isolated infrastructure. On these measurements that means <span class="target">at least 2.532M JSON req/s</span> and <span class="target">23.469M plaintext req/s</span>. The latter exceeds this co-located wrk ceiling, so final proof needs a separate load-generator machine.</p>
+
+      <div class="priority">
+        <h3>1. Coalesce without copied wire staging — blocking priority</h3>
+        <p>The copied wire-batch prototype regressed and was removed. Next experiment should reuse existing response storage with a bounded gather send across complete ordered responses, retaining an iovec cursor for partial sends. Stop on request-slot, iovec, or SQ pressure; preserve observation, close semantics, backpressure, and startup memory budgeting.</p>
+        <p><strong>Why first:</strong> Ploof still needs 9.7× current plaintext throughput to lead. One send call per response remains the largest structural difference, but another copied staging buffer is not the answer.</p>
+      </div>
+
+      <div class="priority">
+        <h3>2. Profile the new JSON ceiling</h3>
+        <p>Capacity and reset fixes moved JSON within 17.6% of the leader, invalidating the old profile. Re-profile on isolated hardware and change only the new top site among serialization, secure clearing, parsing, direct send, and timeout handling. Require a randomized five-run gain.</p>
+      </div>
+
+      <div class="priority">
+        <h3>3. Prove gains on isolated client/server hardware</h3>
+        <p>This desktop was heavily contended during final retest, including unrelated Godot and desktop workloads using many cores. Do not tune around that noise. Run client and server on separate pinned hosts, performance governor, fixed clocks where available, and at least five randomized A/B confirmations.</p>
+      </div>
+
+      <div class="priority">
+        <h3>4. Keep static planning generic</h3>
+        <p>Static plaintext heads are now compiled and Date-patched. Extend eligibility only when normal applications expose another measured static shape. Do not special-case TechEmpower or cache the dynamic JSON body.</p>
+      </div>
+
+      <div class="priority">
+        <h3>5. Preserve capability separation</h3>
+        <p>Request gzip and response workspace planning are now separate. Add compile-time capability combinations only when a route needs them; keep exact slab bounds and the response-only no-gzip regression test.</p>
+      </div>
+
+      <div class="priority">
+        <h3>6. Retune only after gather-send topology changes</h3>
+        <p>Measure cycles/request, CQEs/request, SQEs/request, sends/request, timeout operations/request, cache misses, and wire-batch fill. Then repeat request-slot, connection-slot, receive-buffer, SQ/CQ, and batch-byte sweeps. Current values stay fixed until the topology changes.</p>
+        <p>Do not add framework-specific shortcuts until generic hot paths have been measured. Any capacity change stays fixed, bounded, startup-allocated, and covered by compile-time memory budgeting.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Standards and regression gates</h2>
+      <ul>
+        <li>JSON object remains instantiated and serialized for every request. Never replace it with a static <code>{"message":"Hello, World!"}</code> wire response.</li>
+        <li>Plaintext may use a static body, as TechEmpower permits. Date and Server headers remain present and correct.</li>
+        <li>Direct-send burst is bounded at 16 responses per reactor event and adds no heap allocation. Future gather sending must be fixed, startup-budgeted, and covered by partial-send tests.</li>
+        <li>No removal of parser validation, response ordering, slow-client handling, timeouts, backpressure, or cleanup invariants. Hoist validation only when its inputs are compile-time constants.</li>
+        <li>Final gate: 936/936 build steps and 8,672/8,672 tests passed across Debug, ReleaseSafe, ReleaseFast, TSan, integration, package, and compile-failure checks. Benchmark numbers use ReleaseFast only.</li>
+        <li>All 16 public fuzz families passed in Debug, ReleaseSafe, and ReleaseFast: 48 campaigns, four shards and 100 scheduled runs per campaign. Campaigns were run serially because top-level parallel execution intentionally locks the shared fuzz cache.</li>
+        <li>TigerStyle structure check passes. Every Zig file is at or below 750 lines; the changed request-head decoder is exactly 750.</li>
+        <li>Performance gate: five isolated runs, zero socket/non-2xx errors, correct response identity/body/headers before and after, median gain ≥5%, and no p99 regression over an agreed bound.</li>
+        <li>Use a separate load generator before declaring plaintext leadership; this host's top-ten cluster is client/kernel limited near 22.35M req/s.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Reproduction</h2>
+      <p>Build and run Ploof:</p>
+      <pre>zig build techempower
+./zig-out/bin/ploof-techempower</pre>
+      <p style="margin-top:16px">Verify identity and contract before timing:</p>
+      <pre>curl -i http://127.0.0.1:8080/json
+curl -i http://127.0.0.1:8080/plaintext</pre>
+      <p style="margin-top:16px">Final measured commands:</p>
+      <pre>/tmp/ploof-wrk/wrk -t8 -c512 -d15s --latency \
+  http://127.0.0.1:8080/json
+
+/tmp/ploof-wrk/wrk -t8 -c4096 -d15s --latency \
+  -s /tmp/pipeline.lua http://127.0.0.1:8080/plaintext -- 16</pre>
+      <p style="margin-top:16px">Contract test:</p>
+      <pre>zig test -OReleaseSafe techempower.zig</pre>
+    </section>
+
+    <section>
+      <h2>Limitations</h2>
+      <ul>
+        <li>Shared desktop, loopback topology, powersave governor, and unrelated background CPU activity prevent publication-grade statistics. Unrelated Godot and desktop work consumed many cores during the final retest and was left untouched.</li>
+        <li>Competitors were measured sequentially. Background load changed over the long build/run window, so close competitor ordering is not meaningful. Ploof's gaps are large enough that this does not change the conclusion.</li>
+        <li>Container overhead differs from Ploof's native process. Containers used host networking; Ploof's disadvantage is much larger than plausible container variance.</li>
+        <li>Round 23 repository was archived on 24 March 2026. Exact historical dependency reconstruction is no longer possible for EDAP; may-minihttp required a newer builder only.</li>
+        <li>No official composite score exists for Ploof because five database/cache categories are absent.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="techempower-round23-baseline.tsv">Recorded same-host competitor and Ploof baseline values</a></li>
+        <li><a href="techempower-round23-retest.tsv">Final Ploof ReleaseFast retest values</a></li>
+        <li><a href="https://www.techempower.com/benchmarks/#section=data-r23">TechEmpower Framework Benchmarks — Round 23</a></li>
+        <li><a href="https://www.techempower.com/benchmarks/results/round23/ph.json">Round 23 physical-hardware raw results</a></li>
+        <li><a href="https://github.com/TechEmpower/FrameworkBenchmarks/tree/523534bb61450e3522d775a749ad060753e26e3a">Round 23 source commit</a></li>
+        <li><a href="https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview">Official test requirements</a></li>
+        <li><a href="https://tfb-status.techempower.com/results/91a66052-9d86-446c-b31a-eadbd669ed08">Round 23 run details and hardware</a></li>
+        <li><a href="https://github.com/wg/wrk">wrk load generator</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>Same-host engineering report. No official TechEmpower rank is claimed. Ploof implementation remains bounded, preallocated, and spec-compliant.</footer>
+</body>
+</html>

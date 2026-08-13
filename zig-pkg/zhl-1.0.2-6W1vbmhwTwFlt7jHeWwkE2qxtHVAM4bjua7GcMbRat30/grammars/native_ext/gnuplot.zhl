@@ -1,0 +1,15 @@
+grammar "source.gnuplot" {
+    name "gnuplot";
+    scope root = "source.gnuplot";
+    context main {
+        line_comment "#" scope "comment.line.number-sign.gnuplot";
+        string "\"" escape "\\" scope "string.quoted.double.gnuplot";
+        string "'" escape "\\" scope "string.quoted.single.gnuplot";
+        number generic scope "constant.numeric.gnuplot";
+        keywords "bind break call cd clear continue do else evaluate exit fit for help history if import load lower pause plot print pwd quit raise reread reset save set shell show splot stats system test toggle unset update while" scope "keyword.control.gnuplot";
+        keywords "abs acos acosh arg asin asinh atan atan2 atanh besj0 besj1 besy0 besy1 ceil cos cosh erf erfc exp floor gamma int log log10 rand real sgn sin sinh sqrt tan tanh timecolumn valid value" scope "support.function.builtin.gnuplot";
+        function_call scope "entity.name.function.gnuplot";
+        identifier_before "=" scope "variable.other.field.gnuplot";
+        operators "** == != <= >= && || + - * / % = < > & | ^ ~ ! ? : ; , . { } ( ) [ ]" scope "keyword.operator.gnuplot";
+    }
+}

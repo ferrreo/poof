@@ -1,0 +1,21 @@
+pub struct User<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub active: bool,
+    pub count: u32,
+}
+
+impl<'a> User<'a> {
+    pub fn render(&self) -> String {
+        format!("{}:{}:{}", self.id, self.name, self.count)
+    }
+}
+
+pub fn main() {
+    let user = User { id: "u1", name: "zhl", active: true, count: 42 };
+    let values = [1_u32, 2, 3, 5, 8, 13];
+    for value in values {
+        println!("value={} user={}", value, user.render());
+    }
+    // benchmark comment with nested-looking tokens /* not a block */
+}

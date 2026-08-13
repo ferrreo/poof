@@ -1,0 +1,21 @@
+grammar "source.go" {
+    name "Go";
+    scope root = "source.go";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.go";
+        block_comment "/*" "*/" scope "comment.block.go";
+        string "\"" escape "\\" scope "string.quoted.double.go";
+        block_comment "`" "`" scope "string.quoted.raw.go";
+        char "'" escape "\\" scope "constant.character.go";
+        number generic scope "constant.numeric.go";
+        keywords "break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var" scope "keyword.control.go";
+        keywords "bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr" scope "storage.type.go";
+        keywords "true false iota nil" scope "constant.language.go";
+        keywords "append cap close complex copy delete imag len make new panic print println real recover" scope "support.function.builtin.go";
+        function_call scope "entity.name.function.go";
+        capitalized_identifier scope "entity.name.type.go";
+        regex "[A-Za-z_][A-Za-z0-9_]*" scope "variable.other.go";
+        operators ":= << >> <= >= == != += -= *= /= %= &= |= ^= &^ &^= && || <- ++ -- ! ~ & | ^ * / % + - < > = : ; , . ( ) [ ] { }" scope "keyword.operator.go";
+    }
+}

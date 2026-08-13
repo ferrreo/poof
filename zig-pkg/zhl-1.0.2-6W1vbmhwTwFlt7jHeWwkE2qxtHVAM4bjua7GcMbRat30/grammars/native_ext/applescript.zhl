@@ -1,0 +1,13 @@
+grammar "source.applescript" {
+    name "applescript";
+    scope root = "source.applescript";
+    context main {
+        line_comment "--" scope "comment.line.double-dash.applescript";
+        block_comment "(*" "*)" nested scope "comment.block.applescript";
+        string "\"" escape "\\" scope "string.quoted.double.applescript";
+        number generic scope "constant.numeric.applescript";
+        keywords "about above after against and apart from around as aside at back before beginning behind below beneath beside between but by considering contain contains continue copy div does eighth else end equal equals error every exit false fifth first for fourth from front get given global if ignoring in instead into is it its last local me middle mod my ninth not of on onto or over prop property put reference repeat return returning script second set seventh since sixth some tell tenth that the then third through thru timeout times to transaction true try until where while whose with without" scope "keyword.control.applescript";
+        function_call scope "entity.name.function.applescript";
+        operators "<= >= = ≠ + - * / & ^ : , . ( ) { }" scope "keyword.operator.applescript";
+    }
+}

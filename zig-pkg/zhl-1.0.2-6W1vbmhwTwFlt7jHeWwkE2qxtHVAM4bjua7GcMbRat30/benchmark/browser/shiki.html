@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>shiki browser benchmark</title>
+  <style>
+    body { font-family: ui-monospace, monospace; margin: 2rem; background: #14161b; color: #d8dee9; }
+    h1 { font-size: 1.1rem; }
+    #status { margin: 0.75rem 0; color: #8fbcbb; }
+    table { border-collapse: collapse; margin-top: 0.75rem; }
+    th, td { border: 1px solid #3b4252; padding: 0.25rem 0.6rem; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    #error { color: #bf616a; white-space: pre-wrap; }
+    #results-json { display: none; }
+  </style>
+</head>
+<body>
+  <h1>shiki browser benchmark</h1>
+  <div id="status">loading…</div>
+  <div id="error"></div>
+  <table id="results">
+    <thead>
+      <tr><th>case</th><th>MiB/s</th><th>ns/line</th><th>spans</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <pre id="results-json"></pre>
+  <script type="module" src="./shiki_bench.js"></script>
+</body>
+</html>

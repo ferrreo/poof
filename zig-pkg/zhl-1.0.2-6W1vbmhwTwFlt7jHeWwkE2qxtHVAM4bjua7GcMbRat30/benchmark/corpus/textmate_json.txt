@@ -1,0 +1,29 @@
+{
+  "scopeName": "source.fixture",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "match": "\\\\([nrt\"'\\\\]|x\\h{2}|u\\h{4})", "name": "constant.character.escape.fixture" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "begin": "/\\*", "end": "\\*/", "name": "comment.block.fixture" },
+        { "match": "//.*$", "name": "comment.line.fixture" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "end": "\"|(?<!\\\\)(?=\\n)",
+          "name": "string.quoted.double.fixture",
+          "patterns": [
+            { "match": "\\\\.", "name": "constant.character.escape.fixture" },
+            { "match": "\\{[a-zA-Z0-9_:. -]*\\}", "name": "constant.other.placeholder.fixture" }
+          ]
+        }
+      ]
+    }
+  }
+}

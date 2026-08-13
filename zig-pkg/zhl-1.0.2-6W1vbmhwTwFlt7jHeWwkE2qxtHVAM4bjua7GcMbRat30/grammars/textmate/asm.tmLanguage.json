@@ -1,0 +1,17 @@
+{
+  "name": "Assembly",
+  "scopeName": "source.asm",
+  "patterns": [
+    { "name": "comment.line.semicolon.asm", "match": ";.*$" },
+    { "name": "comment.line.number-sign.asm", "match": "#.*$" },
+    { "name": "entity.name.label.asm", "match": "\\b[A-Za-z_.$][A-Za-z0-9_.$]*:" },
+    { "name": "keyword.other.directive.asm", "match": "\\.[A-Za-z_][A-Za-z0-9_]*\\b" },
+    { "name": "constant.numeric.asm", "match": "\\b(0x[0-9A-Fa-f]+|[0-9]+)\\b" },
+    { "name": "variable.language.register.asm", "match": "%[A-Za-z][A-Za-z0-9]*\\b" },
+    { "name": "string.quoted.double.asm", "begin": "\"", "end": "\"", "patterns": [
+      { "name": "constant.character.escape.asm", "match": "\\\\." }
+    ] },
+    { "name": "keyword.operator.asm", "match": "[,()\\[\\]+\\-*/]" },
+    { "name": "entity.name.function.asm", "match": "\\b[A-Za-z.][A-Za-z0-9_.]*\\b" }
+  ]
+}

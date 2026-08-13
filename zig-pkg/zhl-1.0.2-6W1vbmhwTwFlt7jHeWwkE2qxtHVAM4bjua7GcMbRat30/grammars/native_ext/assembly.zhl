@@ -1,0 +1,15 @@
+grammar "source.asm" {
+    name "asm";
+    scope root = "source.asm";
+    context main {
+        line_comment "#" scope "comment.line.number-sign.asm";
+        line_comment ";" scope "comment.line.semicolon.asm";
+        string "\"" escape "\\" scope "string.quoted.double.asm";
+        number generic scope "constant.numeric.asm";
+        prefix_identifier "%" scope "variable.language.register.asm";
+        prefix_identifier "$" scope "constant.numeric.immediate.asm";
+        identifier_before ":" scope "entity.name.label.asm";
+        keywords "mov movb movw movl movq lea push pop call ret add sub mul imul div idiv inc dec cmp test and or xor not neg shl shr sar sal jmp je jne jz jnz ja jae jb jbe jg jge jl jle loop nop syscall int" scope "support.function.builtin.asm";
+        operators "+ - * / % = < > & | ^ ~ ! : , . ( ) [ ]" scope "keyword.operator.asm";
+    }
+}

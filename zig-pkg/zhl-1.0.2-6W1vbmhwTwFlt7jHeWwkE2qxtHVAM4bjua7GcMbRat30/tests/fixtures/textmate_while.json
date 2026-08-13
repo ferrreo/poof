@@ -1,0 +1,11 @@
+{
+  "scopeName": "source.while-fixture",
+  "name": "While Fixture",
+  "patterns": [
+    {
+      "name": "comment.line.quote.fixture",
+      "begin": "^>",
+      "while": "^>"
+    }
+  ]
+}

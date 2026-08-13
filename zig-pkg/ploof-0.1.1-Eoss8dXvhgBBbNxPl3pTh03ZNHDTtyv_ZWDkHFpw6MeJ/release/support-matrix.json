@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-07-19",
+  "compiler": {
+    "name": "zig",
+    "version": "0.16.0"
+  },
+  "production_target": {
+    "architecture": "x86_64",
+    "cpu_level": "x86-64-v3",
+    "operating_system": "linux",
+    "minimum_kernel_version": "6.1.0",
+    "optimization": "ReleaseSafe",
+    "libc": false,
+    "liburing": false
+  },
+  "cpu_features": [
+    {"name": "cx16", "linux_flags": ["cx16"]},
+    {"name": "lahf_sahf", "linux_flags": ["lahf_lm"]},
+    {"name": "popcnt", "linux_flags": ["popcnt"]},
+    {"name": "sse3", "linux_flags": ["pni", "sse3"]},
+    {"name": "ssse3", "linux_flags": ["ssse3"]},
+    {"name": "sse4_1", "linux_flags": ["sse4_1"]},
+    {"name": "sse4_2", "linux_flags": ["sse4_2"]},
+    {"name": "avx", "linux_flags": ["avx"]},
+    {"name": "avx2", "linux_flags": ["avx2"]},
+    {"name": "bmi1", "linux_flags": ["bmi1"]},
+    {"name": "bmi2", "linux_flags": ["bmi2"]},
+    {"name": "f16c", "linux_flags": ["f16c"]},
+    {"name": "fma", "linux_flags": ["fma"]},
+    {"name": "lzcnt", "linux_flags": ["lzcnt", "abm"]},
+    {"name": "movbe", "linux_flags": ["movbe"]},
+    {"name": "xsave", "linux_flags": ["xsave"]}
+  ],
+  "kernels": [
+    {
+      "id": "linux-6.1-intel",
+      "minimum_version": "6.1.177",
+      "series": "6.1",
+      "role": "floor",
+      "cpu_vendor": "GenuineIntel",
+      "runner_labels": ["ploof-trusted", "kernel-min-6.1.177", "intel"]
+    },
+    {
+      "id": "linux-6.1-amd",
+      "minimum_version": "6.1.177",
+      "series": "6.1",
+      "role": "floor",
+      "cpu_vendor": "AuthenticAMD",
+      "runner_labels": ["ploof-trusted", "kernel-min-6.1.177", "amd"]
+    },
+    {
+      "id": "linux-6.6-intel",
+      "minimum_version": "6.6.144",
+      "series": "6.6",
+      "role": "longterm",
+      "cpu_vendor": "GenuineIntel",
+      "runner_labels": ["ploof-trusted", "kernel-min-6.6.144", "intel"]
+    },
+    {
+      "id": "linux-6.12-amd",
+      "minimum_version": "6.12.95",
+      "series": "6.12",
+      "role": "longterm",
+      "cpu_vendor": "AuthenticAMD",
+      "runner_labels": ["ploof-trusted", "kernel-min-6.12.95", "amd"]
+    },
+    {
+      "id": "linux-6.18-intel",
+      "minimum_version": "6.18.38",
+      "series": "6.18",
+      "role": "longterm",
+      "cpu_vendor": "GenuineIntel",
+      "runner_labels": ["ploof-trusted", "kernel-min-6.18.38", "intel"]
+    },
+    {
+      "id": "linux-7.1-intel",
+      "minimum_version": "7.1.3",
+      "series": "7.1",
+      "role": "current",
+      "cpu_vendor": "GenuineIntel",
+      "runner_labels": ["ploof-trusted", "kernel-min-7.1.3", "intel"]
+    },
+    {
+      "id": "linux-7.1-amd",
+      "minimum_version": "7.1.3",
+      "series": "7.1",
+      "role": "current",
+      "cpu_vendor": "AuthenticAMD",
+      "runner_labels": ["ploof-trusted", "kernel-min-7.1.3", "amd"]
+    }
+  ],
+  "proxies": [
+    {
+      "id": "caddy",
+      "name": "Caddy",
+      "version": "2.11.4",
+      "image": {
+        "repository": "docker.io/library/caddy",
+        "tag": "2.11.4-alpine",
+        "digest": "sha256:98eb57d882ccd5213d1688764db10c1ca2c58a1ca3a6717a3411ad798f7a423a"
+      },
+      "source": "https://github.com/caddyserver/caddy/releases/tag/v2.11.4"
+    },
+    {
+      "id": "nginx",
+      "name": "nginx",
+      "version": "1.30.4",
+      "image": {
+        "repository": "docker.io/library/nginx",
+        "tag": "1.30.4-alpine",
+        "digest": "sha256:8a4f4b94275ff59d809477799cbbaf1a7ab65ed1871403d05e31fd66bdb8db82"
+      },
+      "source": "https://nginx.org/en/download.html"
+    }
+  ],
+  "gate_hosts": {
+    "release.soak-current": "linux-7.1-amd",
+    "release.soak-floor": "linux-6.1-intel",
+    "trusted.proxy-matrix": "linux-7.1-intel",
+    "trusted.real-io-current": "linux-7.1-amd",
+    "trusted.real-io-floor": "linux-6.1-intel",
+    "trusted.sigbench-regression": "linux-7.1-amd",
+    "trusted.thread-sanitizer": "linux-7.1-intel"
+  },
+  "protocol_support": {
+    "application": ["HTTP/1.1"],
+    "listener_transport": "cleartext TCP",
+    "tls_termination": "upstream reverse proxy",
+    "proxy_metadata": ["Forwarded", "X-Forwarded-*", "PROXY protocol v2"],
+    "not_implemented": ["HTTP/2", "HTTP/3", "TLS", "QUIC"]
+  },
+  "deployment_profiles": ["direct-http1", "caddy-http1", "nginx-http1"],
+  "release_soaks": [
+    {"minimum_version": "6.1.177", "duration_seconds": 86400},
+    {"minimum_version": "7.1.3", "duration_seconds": 86400}
+  ]
+}

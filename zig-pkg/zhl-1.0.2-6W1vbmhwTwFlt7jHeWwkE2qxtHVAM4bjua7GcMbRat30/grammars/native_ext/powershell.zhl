@@ -1,0 +1,17 @@
+grammar "source.powershell" {
+    name "powershell";
+    scope root = "source.powershell";
+    context main {
+        line_comment "#" scope "comment.line.number-sign.powershell";
+        block_comment "<#" "#>" scope "comment.block.powershell";
+        string "\"" escape "`" scope "string.quoted.double.powershell";
+        string "'" escape "''" scope "string.quoted.single.powershell";
+        number generic scope "constant.numeric.powershell";
+        prefix_identifier "$" scope "variable.other.powershell";
+        keywords "begin break catch class continue data define do dynamicparam else elseif end enum exit filter finally for foreach from function hidden if in param process return static switch throw trap try until using var while workflow" scope "keyword.control.powershell";
+        keywords "true false null args error home host input matches lastexitcode myinvocation nestedprompt null pid profile pshome psversiontable pwd shellid" scope "variable.language.powershell";
+        function_call scope "entity.name.function.powershell";
+        operators "-eq -ne -gt -ge -lt -le -like -notlike -match -notmatch -contains -notcontains -in -notin -replace -split -join -and -or -xor -not == != <= >= && || += -= *= /= %= ++ --" scope "keyword.operator.powershell";
+        operators "+ - * / % = < > & | ^ ~ ! ? : ; , . @ { } ( ) [ ]" scope "keyword.operator.powershell";
+    }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "zhl-syntect-fancy-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "zhl-syntect-fancy-bench"
+path = "../syntect/src/main.rs"
+
+[dependencies]
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
+two-face = { version = "0.5.1", default-features = false, features = ["syntect-fancy"] }

@@ -1,0 +1,14 @@
+{
+  "scopeName": "source.host",
+  "patterns": [
+    {
+      "name": "string.quoted.host",
+      "contentName": "source.embedded",
+      "begin": "<",
+      "end": ">",
+      "patterns": [
+        { "include": "source.embedded" }
+      ]
+    }
+  ]
+}

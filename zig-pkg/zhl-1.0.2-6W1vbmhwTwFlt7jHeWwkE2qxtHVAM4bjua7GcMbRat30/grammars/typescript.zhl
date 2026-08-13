@@ -1,0 +1,22 @@
+grammar "source.ts" {
+    name "TypeScript";
+    scope root = "source.ts";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.ts";
+        block_comment "/*" "*/" scope "comment.block.ts";
+        string "\"" escape "\\" scope "string.quoted.double.ts";
+        string "'" escape "\\" scope "string.quoted.single.ts";
+        number generic scope "constant.numeric.ts";
+        keywords "any bigint boolean never number object string symbol unknown void" scope "support.type.primitive.ts";
+        keywords "abstract as async await break case catch class const constructor continue debugger" scope "keyword.control.ts";
+        keywords "declare default delete do else enum export extends false finally for from function get if" scope "keyword.control.ts";
+        keywords "implements import in infer instanceof interface keyof let module namespace new null" scope "keyword.control.ts";
+        keywords "of package private protected public readonly require return set static super switch" scope "keyword.control.ts";
+        keywords "this throw true try type typeof undefined unique var while with yield" scope "keyword.control.ts";
+        capitalized_identifier scope "entity.name.type.ts";
+        function_call scope "entity.name.function.ts";
+        operators "=== !== == != <= >= && || ?? ++ -- += -= *= /= %= ** => ... !" scope "keyword.operator.ts";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.ts";
+    }
+}

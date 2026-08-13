@@ -1,0 +1,19 @@
+grammar "source.cs" {
+    name "C#";
+    scope root = "source.cs";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.cs";
+        block_comment "/*" "*/" scope "comment.block.cs";
+        string "\"" escape "\\" scope "string.quoted.double.cs";
+        char "'" escape "\\" scope "constant.character.cs";
+        number generic scope "constant.numeric.cs";
+        dotted_prefix_identifier "[" scope "entity.name.function.decorator.cs";
+        keywords "abstract as async await base break case catch checked class const continue default delegate do else enum event explicit extern finally fixed for foreach get global goto if implicit in interface internal is lock namespace new operator out override params partial private protected public readonly record ref return sealed set sizeof stackalloc static struct switch this throw try typeof unchecked unsafe using virtual void volatile when where while yield" scope "keyword.control.cs";
+        keywords "bool byte char decimal double dynamic false float int long null object sbyte short string true uint ulong ushort var" scope "storage.type.cs";
+        function_call scope "entity.name.function.cs";
+        capitalized_identifier scope "entity.name.type.cs";
+        operators "=> ?? ?. :: ++ -- <= >= == != && || << >> += -= *= /= %= &= |= ^= <<= >>= !" scope "keyword.operator.cs";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.cs";
+    }
+}

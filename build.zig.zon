@@ -1,0 +1,30 @@
+.{
+    .name = .poof,
+    .version = "0.1.0",
+    .fingerprint = 0x4f444098077a6be8,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ploof = .{
+            .url = "https://github.com/ferrreo/ploof/archive/refs/tags/v0.1.1.tar.gz",
+            .hash = "ploof-0.1.1-Eoss8dXvhgBBbNxPl3pTh03ZNHDTtyv_ZWDkHFpw6MeJ",
+        },
+        .zhl = .{
+            .url = "git+https://github.com/ferrreo/zhl#f6dc3d4e1f39ca8e57a5f5ce7748f6555b02a820",
+            .hash = "zhl-1.0.2-6W1vbmhwTwFlt7jHeWwkE2qxtHVAM4bjua7GcMbRat30",
+        },
+        .pg = .{
+            .url = "git+https://github.com/karlseguin/pg.zig#b5a1f25acb8d8008c6b15eb68386e16e624c34f7",
+            .hash = "pg-0.0.0-Wp_7gRG3BgAm5MLwpcVvT6I_ChqlK_6xiZLLJo8kTywl",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "assets",
+        "src",
+        "tests",
+        "migrations",
+        "README.md",
+        "LICENSE",
+    },
+}

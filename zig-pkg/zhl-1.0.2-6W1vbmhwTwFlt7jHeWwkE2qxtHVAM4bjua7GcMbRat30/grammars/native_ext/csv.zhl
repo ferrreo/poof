@@ -1,0 +1,9 @@
+grammar "text.csv" {
+    name "csv";
+    scope root = "text.csv";
+    context main {
+        string "\"" escape "\"" scope "string.quoted.double.csv";
+        number generic scope "constant.numeric.csv";
+        operators "," scope "punctuation.separator.csv";
+    }
+}

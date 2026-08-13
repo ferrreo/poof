@@ -1,0 +1,24 @@
+%YAML 1.2
+---
+name: Variable Fixture
+scope: source.variable-fixture
+variables:
+  ident: '[A-Za-z_][A-Za-z0-9_]*'
+contexts:
+  prototype:
+    - match: '//.*$'
+      scope: comment.line.variable-fixture
+  main:
+    - include: block
+    - match: '@{{ident}}'
+      scope: support.function.builtin.variable-fixture
+    - match: (?<!\w)(?:void|int)(?!\w)
+      scope: storage.type.variable-fixture
+  block:
+    - match: \{
+      scope: punctuation.section.block.begin.variable-fixture
+      set: [block-body]
+  block-body:
+    - match: \}
+      scope: punctuation.section.block.end.variable-fixture
+      pop: true

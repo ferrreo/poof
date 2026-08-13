@@ -1,0 +1,14 @@
+grammar "source.ada" {
+    name "ada";
+    scope root = "source.ada";
+    context main {
+        line_comment "--" scope "comment.line.double-dash.ada";
+        string "\"" escape "\"\"" scope "string.quoted.double.ada";
+        number generic scope "constant.numeric.ada";
+        keywords "abort abs abstract accept access aliased all and array at begin body case constant declare delay delta digits do else elsif end entry exception exit for function generic goto if in interface is limited loop mod new not null of or others out overriding package pragma private procedure protected raise range record rem renames requeue return reverse select separate some subtype synchronized tagged task terminate then type until use when while with xor" scope "keyword.control.ada";
+        keywords "Boolean Character Float Integer Natural Positive String Wide_Character Wide_String" scope "support.type.primitive.ada";
+        capitalized_identifier scope "entity.name.type.ada";
+        function_call scope "entity.name.function.ada";
+        operators ":= => .. ** /= <= >= <> + - * / = < > & : ; , . ( )" scope "keyword.operator.ada";
+    }
+}

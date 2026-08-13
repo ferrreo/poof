@@ -1,0 +1,18 @@
+grammar "text.xml" {
+    name "XML";
+    scope root = "text.xml";
+
+    context main {
+        block_comment "<!--" "-->" scope "comment.block.xml";
+        block_comment "<![CDATA[" "]]>" scope "string.unquoted.cdata.xml";
+        string "\"" escape "\\" scope "string.quoted.double.xml";
+        string "'" escape "\\" scope "string.quoted.single.xml";
+        regex "&[#A-Za-z0-9:]+;" scope "constant.character.entity.xml";
+        regex "<[?][A-Za-z_][A-Za-z0-9_.-]*" scope "punctuation.definition.tag.xml";
+        regex "</[A-Za-z_][A-Za-z0-9_.:-]*" scope "entity.name.tag.xml";
+        regex "<[A-Za-z_][A-Za-z0-9_.:-]*" scope "entity.name.tag.xml";
+        regex "[A-Za-z_:][A-Za-z0-9_.:-]*" scope "entity.other.attribute-name.xml";
+        identifier_before "=" scope "entity.other.attribute-name.xml";
+        operators "< > / ? = ! [ ] & ;" scope "punctuation.definition.tag.xml";
+    }
+}

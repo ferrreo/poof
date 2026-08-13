@@ -1,0 +1,10 @@
+grammar "text.html.markdown" {
+    name "markdown-nix";
+    scope root = "text.html.markdown";
+    context main {
+        block_comment "```" "```" scope "string.quoted.block.markdown";
+        line_comment "#" scope "entity.name.section.markdown";
+        string "`" escape "\\" scope "string.quoted.inline.markdown";
+        operators "* _ > - + [ ] ( )" scope "punctuation.separator.markdown";
+    }
+}

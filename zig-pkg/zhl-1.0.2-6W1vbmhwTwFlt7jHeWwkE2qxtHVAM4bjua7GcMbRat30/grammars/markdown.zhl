@@ -1,0 +1,17 @@
+grammar "text.html.markdown" {
+    name "Markdown";
+    scope root = "text.html.markdown";
+
+    context main {
+        regex "^#{1,6}\\s+.*$" scope "entity.name.section.markdown";
+        regex "^>.*$" scope "comment.block.markdown";
+        regex "^\\s*[-+*]\\s+" scope "punctuation.definition.list.markdown";
+        regex "^\\s*[0-9]+\\.\\s+" scope "punctuation.definition.list.markdown";
+        regex "`[^`]+`" scope "string.quoted.inline.markdown";
+        regex "^```.*$" scope "string.quoted.block.markdown";
+        regex "^~~~.*$" scope "string.quoted.block.markdown";
+        regex "\\*\\*[^*]+\\*\\*" scope "string.quoted.bold.markdown";
+        regex "\\*[^*]+\\*" scope "string.quoted.italic.markdown";
+        regex "\\[[^\\]]+\\]\\([^\\)]+\\)" scope "entity.name.section.link.markdown";
+    }
+}

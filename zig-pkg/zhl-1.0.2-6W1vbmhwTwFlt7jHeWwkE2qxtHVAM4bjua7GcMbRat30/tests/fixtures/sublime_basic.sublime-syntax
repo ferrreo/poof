@@ -1,0 +1,11 @@
+%YAML 1.2
+---
+name: Fixture
+scope: source.fixture
+contexts:
+  main:
+    - match: \b(if|else|return)\b
+      scope: keyword.control.fixture
+    - match: @[A-Za-z_][A-Za-z0-9_]*
+      scope: support.function.builtin.fixture
+

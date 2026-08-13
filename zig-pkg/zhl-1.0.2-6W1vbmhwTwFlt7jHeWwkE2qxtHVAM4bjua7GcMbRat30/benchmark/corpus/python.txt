@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+class User:
+    def __init__(self, name: str, count: int = 0) -> None:
+        self.name = name
+        self.count = count
+
+    def render(self) -> str:
+        return f"name={self.name} count={self.count}\n"
+
+def collect(items: list[User]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for item in items:
+        result[item.name] = result.get(item.name, 0) + item.count
+    return result
+
+if __name__ == "__main__":
+    users = [User("zhl", 42), User("syntax", 7)]
+    print(collect(users))
