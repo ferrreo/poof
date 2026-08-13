@@ -420,7 +420,7 @@ fn callTool(
     }
     if (std.mem.eql(u8, name, "poof_create_changelog")) {
         try requireFields(arguments, &.{
-            "idempotency_key", "title", "slug", "summary", "body", "version",
+            "idempotency_key", "title", "slug", "summary", "body", "version", "issue_ids",
         });
         _ = try idempotencyKey(arguments);
         const changelog_id = try database.createChangelog(principal.owner.id, .{
@@ -432,6 +432,9 @@ fn callTool(
                 return error.InvalidArguments,
             .version = protocol.string(arguments, "version"),
         });
+        var linked_storage: [100]i64 = undefined;
+        const linked = try parseIdArray(arguments, "issue_ids", &linked_storage);
+        try database.setChangelogIssues(changelog_id, linked);
         try protocol.writeToolText(writer, "Changelog draft created.");
         try writer.print(",\"structuredContent\":{{\"changelog_id\":{d}}}}}", .{changelog_id});
         return;
@@ -603,6 +606,29 @@ fn parseStatus(value: []const u8) !domain.IssueStatus {
 
 fn parsePriority(value: []const u8) !domain.Priority {
     return models.parsePriority(value) catch error.InvalidArguments;
+}
+
+fn parseIdArray(
+    arguments: *const protocol.Value,
+    name: []const u8,
+    output: *[100]i64,
+) ![]const i64 {
+    const value = protocol.field(arguments, name) orelse return &.{};
+    const items = switch (value.*) {
+        .array => |array| array,
+        else => return error.InvalidArguments,
+    };
+    if (items.len > output.len) return error.InvalidArguments;
+    for (items, 0..) |*item, index| {
+        const id = switch (item.*) {
+            .number => |number| number.asInt(i64) catch return error.InvalidArguments,
+            else => return error.InvalidArguments,
+        };
+        if (id <= 0) return error.InvalidArguments;
+        for (output[0..index]) |existing| if (existing == id) return error.InvalidArguments;
+        output[index] = id;
+    }
+    return output[0..items.len];
 }
 
 fn writeIssueSummary(writer: *std.Io.Writer, issue: models.IssueSummary) !void {

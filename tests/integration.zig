@@ -205,6 +205,7 @@ test "PostgreSQL migrations and feedback lifecycle" {
         .version = "0.1.0",
         .tags = &.{"new-feature"},
     });
+    try database.setChangelogIssues(changelog_id, &.{issue_id});
     var changelog_storage: [8]poof.store.Changelog = undefined;
     const drafts = try database.listChangelogs(
         arena,
@@ -221,6 +222,14 @@ test "PostgreSQL migrations and feedback lifecycle" {
     );
     try std.testing.expectEqualStrings("0.1.0", published.version.?);
     try std.testing.expect(published.published_at_us != null);
+    var linked_storage: [8]poof.store.IssueSummary = undefined;
+    const linked = try database.listChangelogIssues(
+        arena,
+        changelog_id,
+        &linked_storage,
+    );
+    try std.testing.expectEqual(@as(usize, 1), linked.len);
+    try std.testing.expectEqual(issue_id, linked[0].id);
 }
 
 test "Ploof public routes render persisted feedback" {

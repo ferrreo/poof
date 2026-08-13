@@ -487,6 +487,12 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
         error.NotFound => context.empty(.not_found),
         else => context.empty(.service_unavailable),
     };
+    var linked_storage: [100]models.IssueSummary = undefined;
+    const linked_issues = database.listChangelogIssues(
+        allocator,
+        entry.id,
+        &linked_storage,
+    ) catch return context.empty(.service_unavailable);
     var writer = workspace.writer();
     page.begin(
         &writer,
@@ -513,7 +519,16 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
         return context.empty(.internal_server_error);
     markdown.render(&writer, entry.body_markdown) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("</div></article>") catch return context.empty(.internal_server_error);
+    writer.writeAll("</div>") catch return context.empty(.internal_server_error);
+    if (linked_issues.len != 0) {
+        writer.writeAll("<section class=\"built-from\"><p class=\"kicker\">Built from your feedback</p><div class=\"issue-list\">") catch
+            return context.empty(.internal_server_error);
+        for (linked_issues) |issue| renderIssueCard(&writer, issue) catch
+            return context.empty(.internal_server_error);
+        writer.writeAll("</div></section>") catch
+            return context.empty(.internal_server_error);
+    }
+    writer.writeAll("</article>") catch return context.empty(.internal_server_error);
     page.end(&writer) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }

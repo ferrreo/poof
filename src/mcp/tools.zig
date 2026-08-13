@@ -97,7 +97,7 @@ pub const all = [_]Tool{
         .scope = .admin_changelog,
         .admin = true,
         .schema =
-        \\{"type":"object","required":["idempotency_key","title","slug","summary","body"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"title":{"type":"string","minLength":3,"maxLength":160},"slug":{"type":"string","minLength":1,"maxLength":180,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"summary":{"type":"string","minLength":1,"maxLength":500},"body":{"type":"string","minLength":1,"maxLength":65536},"version":{"type":"string","maxLength":64}},"additionalProperties":false}
+        \\{"type":"object","required":["idempotency_key","title","slug","summary","body"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"title":{"type":"string","minLength":3,"maxLength":160},"slug":{"type":"string","minLength":1,"maxLength":180,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"summary":{"type":"string","minLength":1,"maxLength":500},"body":{"type":"string","minLength":1,"maxLength":65536},"version":{"type":"string","maxLength":64},"issue_ids":{"type":"array","maxItems":100,"uniqueItems":true,"items":{"type":"integer","minimum":1}}},"additionalProperties":false}
         ,
     },
     .{

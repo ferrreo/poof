@@ -878,6 +878,65 @@ pub const Postgres = struct {
         if ((affected orelse 0) != 1) return error.NotFound;
     }
 
+    pub fn setChangelogIssues(
+        self: *Postgres,
+        changelog_id: i64,
+        issue_ids: []const i64,
+    ) models.Error!void {
+        if (issue_ids.len > 100) return error.CapacityExceeded;
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+
+        _ = connection.exec(
+            "DELETE FROM changelog_issue_links WHERE changelog_id = $1",
+            .{changelog_id},
+        ) catch return error.DatabaseUnavailable;
+        for (issue_ids, 0..) |issue_id, index| {
+            const affected = connection.exec(
+                \\INSERT INTO changelog_issue_links (
+                \\    changelog_id, issue_id, sort_order
+                \\)
+                \\SELECT $1, id, $3 FROM issues
+                \\WHERE id = $2 AND status = 'completed'
+            , .{ changelog_id, issue_id, @as(i32, @intCast(index)) }) catch
+                return error.DatabaseUnavailable;
+            if ((affected orelse 0) != 1) return error.Conflict;
+        }
+        connection.commit() catch return error.DatabaseUnavailable;
+    }
+
+    pub fn listChangelogIssues(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        changelog_id: i64,
+        output: []models.IssueSummary,
+    ) models.Error![]models.IssueSummary {
+        var result = self.pool.query(
+            \\SELECT i.id, i.slug, b.name, i.board_id,
+            \\       COALESCE(u.display_name, u.username),
+            \\       i.kind, i.status, i.priority, i.title, i.pinned, i.locked,
+            \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
+            \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
+            \\       i.created_at
+            \\FROM changelog_issue_links link
+            \\JOIN issues i ON i.id = link.issue_id
+            \\JOIN boards b ON b.id = i.board_id
+            \\JOIN users u ON u.id = i.author_id
+            \\WHERE link.changelog_id = $1
+            \\ORDER BY link.sort_order, i.id
+        , .{changelog_id}) catch return error.DatabaseUnavailable;
+        defer result.deinit();
+        var used: usize = 0;
+        while (result.next() catch return error.DatabaseUnavailable) |row| {
+            if (used == output.len) return error.CapacityExceeded;
+            output[used] = try readIssueSummary(row, allocator);
+            used += 1;
+        }
+        return output[0..used];
+    }
+
     pub fn listChangelogs(
         self: *Postgres,
         allocator: std.mem.Allocator,

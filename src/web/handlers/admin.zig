@@ -40,7 +40,8 @@ pub const ChangelogCreateDefinition = ploof.Endpoint(.{
         body: []const u8,
         version: ?[]const u8 = null,
         tags: ?[]const u8 = null,
-    }, formOptions(96 * 1024, 10)),
+        issue_ids: ?[]const u8 = null,
+    }, formOptions(96 * 1024, 12)),
 });
 
 pub const ChangelogPublishDefinition = ploof.Endpoint(.{
@@ -184,7 +185,7 @@ pub fn createChangelog(
     };
     var tag_storage: [12][]const u8 = undefined;
     const tags = parseTags(input.body.tags, &tag_storage);
-    _ = database.createChangelog(principal.user.id, .{
+    const changelog_id = database.createChangelog(principal.user.id, .{
         .title = input.body.title,
         .slug = input.body.slug,
         .summary = input.body.summary,
@@ -193,6 +194,13 @@ pub fn createChangelog(
         .tags = tags,
     }) catch |problem| return switch (problem) {
         error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details are invalid."),
+        else => context.empty(.service_unavailable),
+    };
+    var issue_id_storage: [100]i64 = undefined;
+    const issue_ids = parseIds(input.body.issue_ids, &issue_id_storage) catch
+        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
+    database.setChangelogIssues(changelog_id, issue_ids) catch |problem| return switch (problem) {
+        error.Conflict => context.textStatic(.unprocessable_entity, "Only completed issues can be linked."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#changelog");
@@ -341,6 +349,7 @@ fn renderChangelogs(
     try writer.writeAll(csrf_input);
     try writer.writeAll("<div class=\"form-row\"><label>Title<input name=\"title\" required maxlength=\"160\"></label><label>Slug<input name=\"slug\" required pattern=\"[a-z0-9-]+\" maxlength=\"180\"></label></div>");
     try writer.writeAll("<div class=\"form-row\"><label>Version<input name=\"version\" maxlength=\"64\" placeholder=\"1.0.0\"></label><label>Tags<input name=\"tags\" maxlength=\"300\" placeholder=\"new-feature, improvement\"></label></div>");
+    try writer.writeAll("<label>Completed issue IDs <span class=\"hint\">optional, comma separated</span><input name=\"issue_ids\" maxlength=\"500\" placeholder=\"42, 57\"></label>");
     try writer.writeAll("<label>Summary<input name=\"summary\" required maxlength=\"500\"></label>");
     try writer.writeAll("<label>Release notes<textarea name=\"body\" required maxlength=\"65536\" rows=\"10\" placeholder=\"Markdown and fenced code are supported.\"></textarea></label>");
     try writer.writeAll("<div class=\"form-actions\"><button class=\"button button-primary\" type=\"submit\">Save draft</button></div></form></section>");
@@ -364,6 +373,23 @@ fn parseTags(value: ?[]const u8, output: *[12][]const u8) []const []const u8 {
         if (tag.len == 0) continue;
         if (used == output.len) break;
         output[used] = tag;
+        used += 1;
+    }
+    return output[0..used];
+}
+
+fn parseIds(value: ?[]const u8, output: *[100]i64) ![]const i64 {
+    const input = value orelse return &.{};
+    var used: usize = 0;
+    var iterator = std.mem.splitScalar(u8, input, ',');
+    while (iterator.next()) |raw| {
+        const text = std.mem.trim(u8, raw, " \t");
+        if (text.len == 0) continue;
+        if (used == output.len) return error.TooManyIds;
+        const id = std.fmt.parseInt(i64, text, 10) catch return error.InvalidId;
+        if (id <= 0) return error.InvalidId;
+        for (output[0..used]) |existing| if (existing == id) return error.DuplicateId;
+        output[used] = id;
         used += 1;
     }
     return output[0..used];
