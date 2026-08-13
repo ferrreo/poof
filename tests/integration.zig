@@ -129,6 +129,19 @@ test "PostgreSQL migrations and feedback lifecycle" {
             [_]u8{0x92} ** 32,
         ),
     );
+    _ = try database.pool.exec(
+        \\UPDATE idempotency_keys SET expires_at = now() - interval '1 second'
+        \\WHERE token_id = $1 AND tool_name = 'poof_set_vote'
+        \\  AND request_key = 'concurrent-claim'
+    , .{poof.pg.Binary{ .data = &stored_token.id }});
+    const unknown_claim = try database.claimIdempotency(
+        arena,
+        stored_token.id,
+        "poof_set_vote",
+        "concurrent-claim",
+        claim_digest,
+    );
+    try std.testing.expect(unknown_claim == .unknown);
     database.releaseIdempotency(
         stored_token.id,
         "poof_set_vote",

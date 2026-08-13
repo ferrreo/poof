@@ -57,6 +57,12 @@ Every mutation requires an `idempotency_key` of 8–128 characters. Retrying the
 same tool with the same key and arguments returns the saved result. Reusing the
 key with different arguments returns an error.
 
+Poof reserves a mutation key before execution so concurrent retries cannot run
+twice. If the process dies after the database mutation but before recording
+the result, the reservation becomes an explicit “outcome unknown” state after
+five minutes. It is never silently reclaimed; inspect the resource with read
+tools before deciding whether to use a new key.
+
 Publication requires `"confirm": true`. MCP intentionally exposes no hard
 delete or role-management tool.
 

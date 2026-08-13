@@ -28,7 +28,7 @@ pub const all = [_]Tool{
         .description = "Search and filter feedback with bounded pagination.",
         .scope = .read,
         .schema =
-        \\{"type":"object","properties":{"query":{"type":"string","maxLength":200},"status":{"type":"string","enum":["pending","reviewing","planned","in_progress","completed","closed"]},"kind":{"type":"string","enum":["feature","improvement","bug"]},"limit":{"type":"integer","minimum":1,"maximum":50}},"additionalProperties":false}
+        \\{"type":"object","properties":{"query":{"type":"string","maxLength":200},"status":{"type":"string","enum":["pending","reviewing","planned","in_progress","completed","closed"]},"kind":{"type":"string","enum":["feature","improvement","bug"]},"limit":{"type":"integer","minimum":1,"maximum":50},"offset":{"type":"integer","minimum":0,"maximum":1000000}},"additionalProperties":false}
         ,
     },
     .{

@@ -166,7 +166,7 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
             return context.empty(.service_unavailable)
     else
         false;
-    var comment_storage: [100]models.Comment = undefined;
+    var comment_storage: [20]models.Comment = undefined;
     const comments = database.listComments(allocator, issue_id, &comment_storage) catch
         return context.empty(.service_unavailable);
 
@@ -478,11 +478,11 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"roadmap-grid\">") catch
         return context.empty(.internal_server_error);
-    renderRoadmapColumn(&writer, "Planned", planned.items) catch
+    renderRoadmapColumn(&writer, "Planned", planned) catch
         return context.empty(.internal_server_error);
-    renderRoadmapColumn(&writer, "In progress", progress.items) catch
+    renderRoadmapColumn(&writer, "In progress", progress) catch
         return context.empty(.internal_server_error);
-    renderRoadmapColumn(&writer, "Recently completed", completed.items) catch
+    renderRoadmapColumn(&writer, "Recently completed", completed) catch
         return context.empty(.internal_server_error);
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
     page.end(&writer) catch return context.empty(.internal_server_error);
@@ -856,15 +856,15 @@ fn renderIssueForm(
 fn renderRoadmapColumn(
     writer: *std.Io.Writer,
     title: []const u8,
-    issues: []const models.IssueSummary,
+    result: models.ListResult,
 ) !void {
     try writer.writeAll("<div class=\"roadmap-column\"><header><h2>");
     try writer.writeAll(title);
-    try writer.print("</h2><span>{d}</span></header>", .{issues.len});
-    if (issues.len == 0) {
+    try writer.print("</h2><span>{d}</span></header>", .{result.total});
+    if (result.items.len == 0) {
         try writer.writeAll("<p class=\"roadmap-empty\">Nothing here yet.</p>");
     } else {
-        for (issues) |issue| {
+        for (result.items) |issue| {
             var url: [256]u8 = undefined;
             try writer.writeAll("<a class=\"roadmap-card\" href=\"");
             try writer.writeAll(try page.issueUrl(&url, issue.id, issue.slug));
@@ -873,6 +873,12 @@ fn renderRoadmapColumn(
             try writer.writeAll("</strong><span>");
             try highlight.escapeHtml(writer, issue.board_name);
             try writer.print(" · {d} votes</span></a>", .{issue.vote_count});
+        }
+        if (result.total > @as(i64, @intCast(result.items.len))) {
+            try writer.print("<p class=\"roadmap-empty\">Showing {d} of {d} items.</p>", .{
+                result.items.len,
+                result.total,
+            });
         }
     }
     try writer.writeAll("</div>");

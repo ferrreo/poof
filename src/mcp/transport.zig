@@ -132,6 +132,13 @@ pub fn handle(
                     -32010,
                     "An operation with this idempotency key is still in progress",
                 ),
+                .unknown => return rpcError(
+                    context,
+                    &workspace,
+                    id,
+                    -32011,
+                    "A prior operation may have completed but its result was not recorded; inspect the resource before choosing a new key",
+                ),
                 .replay => |prior_result| {
                     protocol.beginResult(&writer, id) catch
                         return context.empty(.internal_server_error);
@@ -259,7 +266,7 @@ fn callTool(
         return;
     }
     if (std.mem.eql(u8, name, "poof_list_issues")) {
-        try requireFields(arguments, &.{ "query", "status", "kind", "limit" });
+        try requireFields(arguments, &.{ "query", "status", "kind", "limit", "offset" });
         const status = if (protocol.string(arguments, "status")) |value|
             try parseStatus(value)
         else
@@ -270,15 +277,27 @@ fn callTool(
             null;
         const limit_value = protocol.integer(arguments, "limit") orelse 20;
         if (limit_value < 1 or limit_value > 50) return error.InvalidArguments;
+        const offset_value = protocol.integer(arguments, "offset") orelse 0;
+        if (offset_value < 0 or offset_value > 1_000_000) return error.InvalidArguments;
         var storage: [50]models.IssueSummary = undefined;
         const result = try database.listIssues(allocator, .{
             .status = status,
             .kind = kind,
             .query = protocol.string(arguments, "query"),
             .limit = @intCast(limit_value),
+            .offset = @intCast(offset_value),
         }, &storage);
         try protocol.writeToolText(writer, "Feedback loaded.");
-        try writer.print(",\"structuredContent\":{{\"total\":{d},\"issues\":[", .{result.total});
+        try writer.print(
+            ",\"structuredContent\":{{\"total\":{d},\"offset\":{d},\"next_offset\":",
+            .{ result.total, offset_value },
+        );
+        if (offset_value + limit_value < result.total) {
+            try writer.print("{d}", .{offset_value + limit_value});
+        } else {
+            try writer.writeAll("null");
+        }
+        try writer.writeAll(",\"issues\":[");
         for (result.items, 0..) |issue, index| {
             if (index != 0) try writer.writeByte(',');
             try writeIssueSummary(writer, issue);
@@ -290,7 +309,7 @@ fn callTool(
         try requireFields(arguments, &.{"issue_id"});
         const issue_id = try positiveId(arguments, "issue_id");
         const issue = try database.getIssue(allocator, issue_id);
-        var comment_storage: [100]models.Comment = undefined;
+        var comment_storage: [20]models.Comment = undefined;
         const comments = try database.listComments(allocator, issue_id, &comment_storage);
         try protocol.writeToolText(writer, "Issue loaded.");
         try writer.writeAll(",\"structuredContent\":{\"issue\":");

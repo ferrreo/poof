@@ -408,18 +408,20 @@ pub const Postgres = struct {
             \\        token_id, tool_name, request_key, request_digest,
             \\        response_body, expires_at
             \\    ) VALUES (
-            \\        $1, $2, $3, $4, NULL, now() + interval '24 hours'
+            \\        $1, $2, $3, $4, NULL, now() + interval '5 minutes'
             \\    )
             \\    ON CONFLICT (token_id, tool_name, request_key) DO NOTHING
-            \\    RETURNING request_digest, response_body, true AS acquired
+            \\    RETURNING request_digest, response_body, true AS acquired,
+            \\              false AS stale
             \\), selected AS (
-            \\    SELECT request_digest, response_body, false AS acquired
+            \\    SELECT request_digest, response_body, false AS acquired,
+            \\           expires_at <= now() AS stale
             \\    FROM idempotency_keys
             \\    WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
             \\)
-            \\SELECT request_digest, response_body::text, acquired FROM inserted
+            \\SELECT request_digest, response_body::text, acquired, stale FROM inserted
             \\UNION ALL
-            \\SELECT request_digest, response_body::text, acquired FROM selected
+            \\SELECT request_digest, response_body::text, acquired, stale FROM selected
             \\LIMIT 1
         , .{
             pg.Binary{ .data = &token_id },
@@ -437,8 +439,12 @@ pub const Postgres = struct {
         const acquired = row.get(bool, 2) catch return error.InvalidDatabaseData;
         if (acquired) return .acquired;
         const response = row.get(?[]const u8, 1) catch return error.InvalidDatabaseData;
-        return if (response) |json|
-            .{ .replay = allocator.dupe(u8, json) catch return error.CapacityExceeded }
+        if (response) |json| {
+            return .{ .replay = allocator.dupe(u8, json) catch return error.CapacityExceeded };
+        }
+        const stale = row.get(bool, 3) catch return error.InvalidDatabaseData;
+        return if (stale)
+            .unknown
         else
             .pending;
     }
@@ -452,7 +458,9 @@ pub const Postgres = struct {
         response_json: []const u8,
     ) models.Error!void {
         const affected = self.pool.exec(
-            \\UPDATE idempotency_keys SET response_body = $5::jsonb
+            \\UPDATE idempotency_keys SET
+            \\    response_body = $5::jsonb,
+            \\    expires_at = now() + interval '24 hours'
             \\WHERE token_id = $1 AND tool_name = $2 AND request_key = $3
             \\  AND request_digest = $4 AND response_body IS NULL
         , .{
@@ -802,6 +810,10 @@ pub const Postgres = struct {
         defer connection.release();
         connection.begin() catch return error.DatabaseUnavailable;
         errdefer connection.tryRollback() catch {};
+        _ = connection.exec(
+            "SELECT pg_advisory_xact_lock(5790053260621242963)",
+            .{},
+        ) catch return error.DatabaseUnavailable;
 
         var previous = (connection.row(
             \\SELECT status, priority, board_id, pinned, locked, duplicate_of_id
@@ -826,7 +838,7 @@ pub const Postgres = struct {
             var cycle_row = (connection.row(
                 \\WITH RECURSIVE chain AS (
                 \\    SELECT id, duplicate_of_id FROM issues WHERE id = $2
-                \\    UNION ALL
+                \\    UNION
                 \\    SELECT i.id, i.duplicate_of_id
                 \\    FROM issues i
                 \\    JOIN chain c ON i.id = c.duplicate_of_id
@@ -1007,7 +1019,15 @@ pub const Postgres = struct {
         color: []const u8,
     ) models.Error!i64 {
         if (!validBoard(name, slug, description, color)) return error.Conflict;
-        var row = (self.pool.row(
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+        _ = connection.exec(
+            "SELECT pg_advisory_xact_lock(5790053260621242962)",
+            .{},
+        ) catch return error.DatabaseUnavailable;
+        var row = (connection.row(
             \\INSERT INTO boards (name, slug, description, color, sort_order)
             \\SELECT
             \\    $1, $2, $3, $4,
@@ -1016,8 +1036,10 @@ pub const Postgres = struct {
             \\RETURNING id
         , .{ name, slug, description, color }) catch
             return error.DatabaseUnavailable) orelse return error.Conflict;
-        defer row.deinit() catch {};
-        return row.get(i64, 0) catch error.InvalidDatabaseData;
+        const board_id = row.get(i64, 0) catch return error.InvalidDatabaseData;
+        row.deinit() catch return error.DatabaseUnavailable;
+        connection.commit() catch return error.DatabaseUnavailable;
+        return board_id;
     }
 
     pub fn archiveBoard(self: *Postgres, board_id: i64) models.Error!void {

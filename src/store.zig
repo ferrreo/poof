@@ -56,6 +56,7 @@ pub const AutomationEvent = struct {
 pub const IdempotencyClaim = union(enum) {
     acquired,
     pending,
+    unknown,
     replay: []const u8,
 };
 

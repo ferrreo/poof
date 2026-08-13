@@ -10,6 +10,7 @@ const web_middleware = @import("web/middleware.zig");
 
 pub const config = @import("config.zig");
 pub const domain = @import("domain.zig");
+pub const pg = @import("pg");
 pub const api_token = @import("auth/api_token.zig");
 pub const cookie = @import("auth/cookie.zig");
 pub const discord = @import("auth/discord.zig");
