@@ -6,37 +6,39 @@ system needs to grow.
 
 ## Genre
 
-editorial
+modern-minimal
 
 ## Macrostructure family
 
 - Marketing / home: Index-First. The board is the page. No centred hero, no
   display headline above the fold.
-- App pages: Workbench. Functional headings, hairline rules, the list or form
+- App pages: Workbench. Functional headings, sticky tools, the list or form
   carries the page. No enrichment.
 - Content pages: Long Document. Changelog reads as release notes, not cards.
 
 ## Theme
 
-Newsprint. Warm paper, oxblood accent, roman display.
+Studied DNA from https://pika-os.com. Warm paper yellows, ink borders, bright
+amber accent.
 
-- `--color-paper`   oklch(92% 0.045 50)
-- `--color-paper-2` oklch(89% 0.050 50)
-- `--color-ink`     oklch(15% 0.030 25)
-- `--color-ink-2`   oklch(20% 0.030 28)
-- `--color-rule`    oklch(68% 0.030 40)
-- `--color-accent`  oklch(32% 0.10 28)
-- `--color-focus`   oklch(48% 0.18 30)
+- `--color-paper`   oklch(97.5% 0.015 96)
+- `--color-paper-2` oklch(95.5% 0.018 96)
+- `--color-paper-3` oklch(93% 0.022 96)
+- `--color-ink`     oklch(26% 0.012 96)
+- `--color-ink-2`   oklch(32% 0.012 96)
+- `--color-rule`    oklch(82% 0.014 96)
+- `--color-accent`  oklch(90.2% 0.173 96.7)
+- `--color-focus`   oklch(72% 0.16 96.7)
 
 ## Typography
 
-- Display: Newsreader, weight 700, style normal
-- Body: IBM Plex Sans, weight 400
-- Mono: IBM Plex Mono, weight 400 (code fences only)
-- Display tracking: -0.022em
+- Display: Ubuntu Sans, weight 700, style normal
+- Body: Ubuntu Sans, weight 400
+- Mono: JetBrains Mono, weight 400 (code fences and admin labels)
+- Display tracking: -0.02em
 - Type scale anchor: `--text-display` = clamp(2rem, 3vw + 1rem, 2.875rem)
 
-Home does not use display type. Interior pages use `--text-display-s` for page
+Home does not use display type. Interior pages use `--text-display` for page
 titles so long issue titles stay readable.
 
 ## Spacing
@@ -60,9 +62,9 @@ tokens (`var(--space-md)`), never raw values.
 
 ## CTA voice
 
-- Primary CTA: ink fill, square corners, 14px IBM Plex Sans 500. Verb names
-  the action (`New feedback`, `Post comment`, `Save`).
-- Secondary CTA: hairline border, paper fill, same padding rhythm.
+- Primary CTA: ink fill, amber text, small radius, 14px Ubuntu Sans 600. Verb
+  names the action (`New feedback`, `Post comment`, `Save`).
+- Secondary CTA: 1px ink/rule border, paper fill, same padding rhythm.
 
 ## Per-page allowances
 
@@ -73,11 +75,11 @@ tokens (`var(--space-md)`), never raw values.
 
 ## What pages MUST share
 
-- The wordmark set in Newsreader.
-- The oxblood accent at ≤ 5 % of any viewport (links, active nav, focus, bug
-  labels).
-- Newsreader + IBM Plex Sans + IBM Plex Mono.
-- Square CTA voice (radius 0, ink primary, hairline secondary).
+- Site title (and optional logo) from admin branding settings.
+- Amber accent at ≤ 8 % of any viewport (active nav underline, focus, primary
+  CTA text).
+- Ubuntu Sans + JetBrains Mono.
+- Compact CTA voice (radius-sm, ink primary with accent text, bordered secondary).
 - Stacked section heads. No hanging left-margin labels.
 
 ## What pages MAY differ on
@@ -88,9 +90,9 @@ tokens (`var(--space-md)`), never raw values.
 
 ## Nav and footer
 
-- Nav: N6 newspaper masthead. Small caps ledger line, centred wordmark,
-  double rule, then a single bar of destinations plus the session action.
-- Footer: Ft4 dense colophon. One block of credits, then the MCP tokens link.
+- Nav: N1b sticky slab. Brand left, destinations plus session action on the
+  right, heavy bottom border.
+- Footer: Ft2 compact colophon. Credits line, then the MCP tokens link.
 
 ## Exports
 

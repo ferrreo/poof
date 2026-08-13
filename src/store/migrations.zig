@@ -29,6 +29,11 @@ const migrations = [_]Migration{
         .name = "concurrency_guards",
         .sql = @embedFile("migration_004"),
     },
+    .{
+        .version = 5,
+        .name = "site_settings",
+        .sql = @embedFile("migration_005"),
+    },
 };
 
 const advisory_lock_id: i64 = 0x506f6f664d696772;

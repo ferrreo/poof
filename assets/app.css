@@ -989,7 +989,7 @@ input[type="checkbox"] {
     repeat(3, minmax(7rem, 0.9fr))
     auto auto
     minmax(6rem, 0.8fr)
-    auto auto;
+    auto;
   gap: var(--space-xs);
   align-items: end;
   padding: var(--space-md) 0;
@@ -1045,7 +1045,7 @@ input[type="checkbox"] {
 
 .board-admin-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-lg);
 }
 
@@ -1241,6 +1241,10 @@ input[type="checkbox"] {
   color: var(--color-ink-2);
   font-size: var(--text-sm);
   font-weight: 500;
+}
+
+.branding-preview {
+  margin: 0;
 }
 
 /* ── Forms ─────────────────────────────────────────────────────────────── */

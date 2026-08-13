@@ -135,15 +135,16 @@ fn renderIssueList(
         .offset = (@as(u32, page_number) - 1) * 20,
     }, &item_storage) catch return context.empty(.service_unavailable);
 
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
     page.begin(
         &writer,
-        settings,
+        branding,
         "Feedback",
         .feedback,
         if (current) |*value| &value.user else null,
     ) catch return context.empty(.internal_server_error);
-    if (show_hero) renderHero(&writer, settings) catch
+    if (show_hero) renderHero(&writer, branding) catch
         return context.empty(.internal_server_error);
     renderFilters(&writer, boards, query) catch
         return context.empty(.internal_server_error);
@@ -201,10 +202,11 @@ pub fn detail(
         return request.redirect(context, .moved_permanently, canonical);
     }
 
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
     page.begin(
         &writer,
-        settings,
+        branding,
         issue.title,
         .feedback,
         if (current) |*value| &value.user else null,
@@ -265,11 +267,22 @@ pub fn detail(
     ) catch
         return context.empty(.internal_server_error);
     if (issue.evidence_url) |url| {
-        writer.writeAll("<a class=\"button button-quiet\" rel=\"nofollow noopener\" href=\"") catch
-            return context.empty(.internal_server_error);
-        highlight.escapeHtml(&writer, url) catch return context.empty(.internal_server_error);
-        writer.writeAll("\">View evidence ↗</a>") catch
-            return context.empty(.internal_server_error);
+        if (page.looksLikeImageUrl(url)) {
+            writer.writeAll("<figure class=\"evidence-figure\"><img class=\"markdown-image\" src=\"") catch
+                return context.empty(.internal_server_error);
+            highlight.escapeHtml(&writer, url) catch return context.empty(.internal_server_error);
+            writer.writeAll("\" alt=\"Evidence\" loading=\"lazy\"><figcaption><a class=\"text-link\" rel=\"nofollow noopener\" href=\"") catch
+                return context.empty(.internal_server_error);
+            highlight.escapeHtml(&writer, url) catch return context.empty(.internal_server_error);
+            writer.writeAll("\">Open evidence ↗</a></figcaption></figure>") catch
+                return context.empty(.internal_server_error);
+        } else {
+            writer.writeAll("<a class=\"button button-quiet\" rel=\"nofollow noopener\" href=\"") catch
+                return context.empty(.internal_server_error);
+            highlight.escapeHtml(&writer, url) catch return context.empty(.internal_server_error);
+            writer.writeAll("\">View evidence ↗</a>") catch
+                return context.empty(.internal_server_error);
+        }
     }
     writer.writeAll("</aside></div></article>") catch
         return context.empty(.internal_server_error);
@@ -300,8 +313,9 @@ pub fn newIssue(context: *app_state.Context) app_state.Context.ResponseType {
     var csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
 
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, settings, "Share feedback", .feedback, &current.?.user) catch
+    page.begin(&writer, branding, "Share feedback", .feedback, &current.?.user) catch
         return context.empty(.internal_server_error);
     renderIssueForm(&writer, boards, csrf_token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -428,8 +442,9 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
     ) catch return context.empty(.service_unavailable);
     const csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, settings, "My activity", .none, &current.user) catch
+    page.begin(&writer, branding, "My activity", .none, &current.user) catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"profile-page\"><header><h1>") catch
         return context.empty(.internal_server_error);
@@ -490,10 +505,11 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
         .limit = 20,
     }, &completed_storage) catch return context.empty(.service_unavailable);
 
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
     page.begin(
         &writer,
-        settings,
+        branding,
         "Roadmap",
         .roadmap,
         if (current) |*value| &value.user else null,
@@ -536,10 +552,11 @@ pub fn changelog(
         (@as(u32, changelog_page) - 1) * 20,
         &changelog_storage,
     ) catch return context.empty(.service_unavailable);
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
     page.begin(
         &writer,
-        settings,
+        branding,
         "Changelog",
         .changelog,
         if (current) |*value| &value.user else null,
@@ -592,10 +609,11 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
         entry.id,
         &linked_storage,
     ) catch return context.empty(.service_unavailable);
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
     page.begin(
         &writer,
-        settings,
+        branding,
         entry.title,
         .changelog,
         if (current) |*value| &value.user else null,
@@ -845,7 +863,7 @@ fn renderDiscussion(
     };
     try writer.writeAll("<form class=\"comment-form\" method=\"post\" action=\"comments\">");
     try writer.writeAll(hidden);
-    try writer.writeAll("<label for=\"comment-body\">Add to the conversation</label>");
+    try writer.writeAll("<label for=\"comment-body\">Add to the conversation <span class=\"hint\">Markdown and ![alt](https://...) images</span></label>");
     try writer.writeAll("<textarea id=\"comment-body\" name=\"body\" required maxlength=\"4096\" rows=\"5\"></textarea>");
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Post comment</button></form></section>");
 }
@@ -915,13 +933,13 @@ fn renderIssueForm(
     }
     try writer.writeAll("</select></label></div>");
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" placeholder=\"A concise summary\"></label>");
-    try writer.writeAll("<label>Description<textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve? Markdown and code fences are supported.\"></textarea></label>");
+    try writer.writeAll("<label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve?\"></textarea></label>");
     try writer.writeAll("<fieldset class=\"bug-fields\" data-bug-fields><legend>Bug details</legend>");
     try writer.writeAll("<label>Steps to reproduce<textarea name=\"reproduction_steps\" maxlength=\"8192\" rows=\"5\"></textarea></label>");
     try writer.writeAll("<label>Expected behavior<textarea name=\"expected_behavior\" maxlength=\"8192\" rows=\"3\"></textarea></label>");
     try writer.writeAll("<label>Actual behavior<textarea name=\"actual_behavior\" maxlength=\"8192\" rows=\"3\"></textarea></label>");
     try writer.writeAll("<label>Environment and version<textarea name=\"environment\" maxlength=\"8192\" rows=\"3\"></textarea></label></fieldset>");
-    try writer.writeAll("<label>Evidence URL <span class=\"hint\">optional</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" placeholder=\"https://...\"></label>");
+    try writer.writeAll("<label>Evidence image or URL <span class=\"hint\">optional https link; image URLs preview on the issue</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" placeholder=\"https://.../screenshot.png\"></label>");
     try writer.writeAll("<div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/\">Cancel</a>");
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Submit feedback</button></div></form></section>");
 }

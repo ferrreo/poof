@@ -109,6 +109,10 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         admin_handlers.IssueContentDefinition.handle(admin_handlers.editIssueContent),
     ),
     ploof.post(
+        "/admin/settings",
+        admin_handlers.SiteSettingsDefinition.handle(admin_handlers.updateSiteSettings),
+    ),
+    ploof.post(
         "/admin/boards",
         admin_handlers.BoardCreateDefinition.handle(admin_handlers.createBoard),
     ),

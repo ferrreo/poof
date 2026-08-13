@@ -9,9 +9,21 @@ const highlight = @import("highlight.zig");
 pub const css_path = assetPath("app.css");
 pub const javascript_path = assetPath("app.js");
 
+pub fn resolveBranding(
+    allocator: std.mem.Allocator,
+    database: anytype,
+    settings: *const config.Config,
+) store.SiteBranding {
+    return database.getSiteSettings(allocator) catch .{
+        .company_name = settings.company_name,
+        .tagline = settings.tagline,
+        .logo_url = null,
+    };
+}
+
 pub fn begin(
     writer: *std.Io.Writer,
-    settings: *const config.Config,
+    branding: store.SiteBranding,
     title: []const u8,
     active: enum { feedback, roadmap, changelog, admin, none },
     user: ?*const store.User,
@@ -25,12 +37,18 @@ pub fn begin(
     try writer.writeAll("<title>");
     try highlight.escapeHtml(writer, title);
     try writer.writeAll(" — ");
-    try highlight.escapeHtml(writer, settings.company_name);
+    try highlight.escapeHtml(writer, branding.company_name);
     try writer.writeAll("</title></head><body>");
     try writer.writeAll("<header class=\"site-header\">");
-    try writer.writeAll("<p class=\"masthead-kicker\">Open product ledger</p>");
     try writer.writeAll("<a class=\"brand\" href=\"/\">");
-    try highlight.escapeHtml(writer, settings.company_name);
+    if (branding.logo_url) |logo| {
+        try writer.writeAll("<img class=\"brand-logo\" src=\"");
+        try escapeAttribute(writer, logo);
+        try writer.writeAll("\" alt=\"");
+        try escapeAttribute(writer, branding.company_name);
+        try writer.writeAll("\">");
+    }
+    try highlight.escapeHtml(writer, branding.company_name);
     try writer.writeAll("</a><div class=\"masthead-bar\"><nav aria-label=\"Primary navigation\">");
     try navLink(writer, "/", "Feedback", active == .feedback);
     try navLink(writer, "/roadmap", "Roadmap", active == .roadmap);
@@ -96,7 +114,11 @@ pub fn errorPage(
     title: []const u8,
     message: []const u8,
 ) std.Io.Writer.Error!void {
-    try begin(writer, settings, title, .none, null);
+    try begin(writer, .{
+        .company_name = settings.company_name,
+        .tagline = settings.tagline,
+        .logo_url = null,
+    }, title, .none, null);
     try writer.writeAll("<section class=\"empty-card error-page\"><p class=\"kicker\">");
     try highlight.escapeHtml(writer, status);
     try writer.writeAll("</p><h1>");
@@ -105,6 +127,15 @@ pub fn errorPage(
     try highlight.escapeHtml(writer, message);
     try writer.writeAll("</p><a class=\"button button-primary\" href=\"/\">Back to feedback</a></section>");
     try end(writer);
+}
+
+pub fn looksLikeImageUrl(url: []const u8) bool {
+    const path_end = std.mem.indexOfAny(u8, url, "?#") orelse url.len;
+    const path = url[0..path_end];
+    inline for (.{ ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif" }) |ext| {
+        if (std.ascii.endsWithIgnoreCase(path, ext)) return true;
+    }
+    return false;
 }
 
 fn navLink(
@@ -117,6 +148,19 @@ fn navLink(
         "<a{s} href=\"{s}\">{s}</a>",
         .{ if (active) " class=\"active\"" else "", href, label },
     );
+}
+
+fn escapeAttribute(writer: *std.Io.Writer, value: []const u8) std.Io.Writer.Error!void {
+    for (value) |byte| {
+        switch (byte) {
+            '&' => try writer.writeAll("&amp;"),
+            '<' => try writer.writeAll("&lt;"),
+            '>' => try writer.writeAll("&gt;"),
+            '"' => try writer.writeAll("&quot;"),
+            '\'' => try writer.writeAll("&#39;"),
+            else => try writer.writeByte(byte),
+        }
+    }
 }
 
 fn assetPath(comptime name: []const u8) []const u8 {

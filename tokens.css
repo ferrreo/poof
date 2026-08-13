@@ -1,22 +1,22 @@
 :root {
-  --color-paper: oklch(92% 0.045 50);
-  --color-paper-2: oklch(89% 0.050 50);
-  --color-paper-3: oklch(84% 0.054 45);
-  --color-rule: oklch(68% 0.030 40);
-  --color-rule-2: oklch(35% 0.020 35);
-  --color-muted: oklch(46% 0.022 35);
-  --color-neutral: oklch(30% 0.025 30);
-  --color-ink-2: oklch(20% 0.030 28);
-  --color-ink: oklch(15% 0.030 25);
-  --color-accent: oklch(32% 0.10 28);
-  --color-accent-ink: oklch(45% 0.13 30);
-  --color-focus: oklch(48% 0.18 30);
-  --color-code-paper: oklch(18% 0.02 250);
-  --color-code-ink: oklch(90% 0.02 250);
+  --color-paper: oklch(97.5% 0.015 96);
+  --color-paper-2: oklch(95.5% 0.018 96);
+  --color-paper-3: oklch(93% 0.022 96);
+  --color-rule: oklch(82% 0.014 96);
+  --color-rule-2: oklch(68% 0.016 96);
+  --color-muted: oklch(52% 0.014 96);
+  --color-neutral: oklch(38% 0.013 96);
+  --color-ink-2: oklch(32% 0.012 96);
+  --color-ink: oklch(26% 0.012 96);
+  --color-accent: oklch(90.2% 0.173 96.7);
+  --color-accent-ink: oklch(42% 0.12 96);
+  --color-focus: oklch(72% 0.16 96.7);
+  --color-code-paper: oklch(22% 0.012 96);
+  --color-code-ink: oklch(94% 0.02 96);
 
-  --font-display: "Newsreader", "Source Serif 4", ui-serif, Georgia, serif;
-  --font-body: "IBM Plex Sans", ui-sans-serif, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --display-weight: 700;
   --display-style: normal;
@@ -28,14 +28,14 @@
   --text-lg: 1.375rem;
   --text-xl: 1.75rem;
   --text-2xl: 2.25rem;
-  --text-display-s: clamp(2rem, 3vw + 1rem, 2.875rem);
+  --text-display-s: clamp(1.75rem, 2.5vw + 1rem, 2.5rem);
   --text-display: clamp(2rem, 3vw + 1rem, 2.875rem);
 
-  --tracking-display: -0.022em;
-  --tracking-tight: -0.008em;
-  --tracking-label: 0.08em;
+  --tracking-display: -0.02em;
+  --tracking-tight: -0.006em;
+  --tracking-label: 0.06em;
 
-  --lh-display: 1.12;
+  --lh-display: 1.15;
   --lh-normal: 1.55;
   --lh-relaxed: 1.65;
 
@@ -53,9 +53,12 @@
   --page: min(72rem, calc(100% - var(--space-xl)));
   --page-narrow: min(42rem, calc(100% - var(--space-xl)));
 
-  --radius-card: 0;
-  --radius-pill: 0;
-  --radius-input: 0;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-card: var(--radius-sm);
+  --radius-pill: var(--radius-sm);
+  --radius-input: var(--radius-sm);
   --rule-card: 1px;
   --rule-heavy: 2px;
   --shadow-card: none;

@@ -138,8 +138,9 @@ fn render(
     const csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
 
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, settings, "Developer tokens", .none, &principal.user) catch
+    page.begin(&writer, branding, "Developer tokens", .none, &principal.user) catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"developer-page\"><header>") catch
         return context.empty(.internal_server_error);
