@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: poof_test
+          POSTGRES_USER: poof
+          POSTGRES_PASSWORD: poof
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U poof -d poof_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig 0.16.0
+        shell: bash
+        run: |
+          curl -fL \
+            https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz \
+            -o /tmp/zig.tar.xz
+          echo "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00  /tmp/zig.tar.xz" \
+            | sha256sum -c -
+          tar -xf /tmp/zig.tar.xz -C /tmp
+          echo "/tmp/zig-x86_64-linux-0.16.0" >> "$GITHUB_PATH"
+
+      - name: Unit tests and formatting
+        run: zig build test
+
+      - name: PostgreSQL integration tests
+        run: >-
+          zig build test-integration
+          -Ddatabase-url=postgresql://poof:poof@127.0.0.1:5432/poof_test?sslmode=disable
+
+      - name: ReleaseSafe build
+        run: zig build -Doptimize=ReleaseSafe
