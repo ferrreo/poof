@@ -172,7 +172,7 @@ pub const App = ploof.Application(.{
     .State = State,
     .assets = Assets,
     .middleware = .{web_middleware.SecurityHeaders{}},
-    .response_body_bytes_max = 6 * 1024 * 1024,
+    .response_body_bytes_max = 512 * 1024,
     .routes = .{
         BrowserRoutes,
         ploof.post("/mcp", mcp_transport.Definition.handle(mcp_transport.handle)),
@@ -186,7 +186,7 @@ pub const WebTestApp = ploof.Application(.{
     .State = State,
     .assets = Assets,
     .middleware = .{web_middleware.SecurityHeaders{}},
-    .response_body_bytes_max = 6 * 1024 * 1024,
+    .response_body_bytes_max = 512 * 1024,
     .routes = .{
         BrowserRoutes,
         ploof.post("/mcp", mcp_transport.Definition.handle(mcp_transport.handle)),

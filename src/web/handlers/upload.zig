@@ -85,7 +85,7 @@ pub const UploadConsumer = struct {
         std.Io.random(io, &raw);
         var key_buf: [s3.key_bytes_max]u8 = undefined;
         const key = std.fmt.bufPrint(&key_buf, "{s}.{s}", .{
-            std.fmt.fmtSliceHexLower(&raw),
+            std.fmt.bytesToHex(raw, .lower),
             extension,
         }) catch return .{ .reject = context.empty(.internal_server_error) };
 
@@ -143,23 +143,104 @@ pub const UploadConsumer = struct {
     }
 };
 
-pub fn serveMedia(context: *app_state.Context) app_state.Context.ResponseType {
-    const settings = app_state.config(context) orelse
-        return context.empty(.service_unavailable);
-    const rustfs = settings.rustfs orelse
-        return context.textStatic(.service_unavailable, "Image storage is not configured.");
-    const key = context.request.param("key") orelse return context.empty(.not_found);
-    s3.validateKey(key) catch return context.empty(.not_found);
+/// Streams one object from RustFS. The body lives on the page allocator until join/abort.
+pub const MediaProducer = struct {
+    bytes: ?[]u8 = null,
+    offset: usize = 0,
 
-    const io = context.state.io orelse return context.empty(.service_unavailable);
-    const allocator = context.state.allocator orelse return context.empty(.service_unavailable);
-    const output = context.response_body orelse
-        return context.empty(.service_unavailable);
-    const bytes = s3.getObject(io, allocator, rustfs.storage(), key, output) catch
-        return context.empty(.not_found);
+    pub fn poll(
+        self: *MediaProducer,
+        output: []u8,
+        _: ploof.response_stream.Wake,
+    ) ploof.response_stream.PollError!ploof.response_stream.PollResult {
+        const data = self.bytes orelse return .{ .done = &.{} };
+        if (self.offset >= data.len) return .{ .done = &.{} };
+        if (output.len == 0) return error.ProducerFailed;
+        const remaining = data[self.offset..];
+        const used = @min(output.len, remaining.len);
+        @memcpy(output[0..used], remaining[0..used]);
+        self.offset += used;
+        return .{ .progress = used };
+    }
 
-    var response = context.bytesBorrowed(.ok, bytes);
-    response.setHeader("content-type", s3.contentTypeForKey(key)) catch {};
+    pub fn abort(self: *MediaProducer) void {
+        self.clear();
+    }
+
+    pub fn join(self: *MediaProducer) void {
+        self.clear();
+    }
+
+    fn clear(self: *MediaProducer) void {
+        if (self.bytes) |buffer| {
+            std.heap.page_allocator.free(buffer);
+            self.bytes = null;
+        }
+        self.offset = 0;
+    }
+};
+
+pub fn serveMedia(
+    context: *app_state.Context,
+) app_state.Context.StreamResponse(MediaProducer) {
+    const unavailable = struct {
+        fn call(ctx: *app_state.Context) app_state.Context.StreamResponse(MediaProducer) {
+            return ctx.streamExact(
+                .service_unavailable,
+                ploof.response.media.octet_stream,
+                0,
+                MediaProducer{},
+            );
+        }
+    }.call;
+    const missing = struct {
+        fn call(ctx: *app_state.Context) app_state.Context.StreamResponse(MediaProducer) {
+            return ctx.streamExact(
+                .not_found,
+                ploof.response.media.octet_stream,
+                0,
+                MediaProducer{},
+            );
+        }
+    }.call;
+
+    const settings = app_state.config(context) orelse return unavailable(context);
+    const rustfs = settings.rustfs orelse return unavailable(context);
+    const key = context.request.param("key") orelse return missing(context);
+    s3.validateKey(key) catch return missing(context);
+
+    const io = context.state.io orelse return unavailable(context);
+    const allocator = context.state.allocator orelse return unavailable(context);
+
+    const buffer = std.heap.page_allocator.alloc(u8, s3.max_object_bytes) catch
+        return unavailable(context);
+    errdefer std.heap.page_allocator.free(buffer);
+
+    const fetched = s3.getObject(io, allocator, rustfs.storage(), key, buffer) catch {
+        std.heap.page_allocator.free(buffer);
+        return missing(context);
+    };
+
+    const owned = std.heap.page_allocator.realloc(buffer, fetched.len) catch buffer[0..fetched.len];
+    const media_type: ploof.response.MediaType = if (std.ascii.endsWithIgnoreCase(key, ".png"))
+        .{ .value = "image/png" }
+    else if (std.ascii.endsWithIgnoreCase(key, ".jpg") or std.ascii.endsWithIgnoreCase(key, ".jpeg"))
+        .{ .value = "image/jpeg" }
+    else if (std.ascii.endsWithIgnoreCase(key, ".gif"))
+        .{ .value = "image/gif" }
+    else if (std.ascii.endsWithIgnoreCase(key, ".webp"))
+        .{ .value = "image/webp" }
+    else
+        ploof.response.media.octet_stream;
+
+    var response = context.stream(
+        .ok,
+        media_type,
+        ploof.response_stream.exact(owned.len, MediaProducer{ .bytes = owned }),
+    ) catch {
+        std.heap.page_allocator.free(owned);
+        return unavailable(context);
+    };
     response.setHeaderStatic("cache-control", "public, max-age=31536000, immutable") catch {};
     return response;
 }

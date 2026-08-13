@@ -9,7 +9,7 @@ pub const SecurityHeaders = struct {
         _: SecurityHeaders,
         _: *app_state.Context,
         _: *State,
-        value: *app_state.Context.ResponseType,
+        value: anytype,
     ) void {
         value.setHeaderStatic(
             "content-security-policy",

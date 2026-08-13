@@ -28,6 +28,19 @@ pub fn ensureBucket(
 ) Error!void {
     var url_buf: [512]u8 = undefined;
     const url = try objectUrl(&url_buf, settings, "");
+    const head = try signedExchange(
+        io,
+        allocator,
+        settings,
+        .HEAD,
+        url,
+        "",
+        "application/xml",
+        &.{},
+        null,
+    );
+    if (head == .ok) return;
+
     const status = try signedExchange(
         io,
         allocator,
@@ -40,11 +53,10 @@ pub fn ensureBucket(
         null,
     );
     if (status == .ok or status == .created) return;
-    // Already owned by us / exists.
+    // Already owned / exists.
     if (@intFromEnum(status) == 409) return;
     if (@intFromEnum(status) == 405) {
-        // Some S3 endpoints reject empty-bucket PUT path quirks; HeadBucket next.
-        const head = try signedExchange(
+        const again = try signedExchange(
             io,
             allocator,
             settings,
@@ -55,7 +67,7 @@ pub fn ensureBucket(
             &.{},
             null,
         );
-        if (head == .ok) return;
+        if (again == .ok) return;
     }
     return error.BucketUnavailable;
 }
@@ -171,7 +183,7 @@ pub fn detectImage(
 }
 
 fn objectUrl(buffer: []u8, settings: Config, key: []const u8) Error![]const u8 {
-    const endpoint = std.mem.trimRight(u8, settings.endpoint, "/");
+    const endpoint = std.mem.trimEnd(u8, settings.endpoint, "/");
     if (endpoint.len == 0) return error.InvalidEndpoint;
     var writer = std.Io.Writer.fixed(buffer);
     writer.writeAll(endpoint) catch return error.NoSpaceLeft;
@@ -208,17 +220,30 @@ fn signedExchange(
     response_writer: ?*std.Io.Writer,
 ) Error!std.http.Status {
     const uri = std.Uri.parse(url) catch return error.InvalidEndpoint;
-    var host_buf: [std.Io.net.HostName.max_len]u8 = undefined;
-    const host_name = uri.getHost(&host_buf) catch return error.InvalidEndpoint;
-    const host = host_name.bytes;
+    var host_only_buf: [std.Io.net.HostName.max_len]u8 = undefined;
+    const host_name = uri.getHost(&host_only_buf) catch return error.InvalidEndpoint;
+    var host_buf: [std.Io.net.HostName.max_len + 8]u8 = undefined;
+    const host = blk: {
+        const default_port: ?u16 = if (std.mem.eql(u8, uri.scheme, "https"))
+            443
+        else if (std.mem.eql(u8, uri.scheme, "http"))
+            80
+        else
+            null;
+        if (uri.port) |port| {
+            if (default_port == null or port != default_port.?) {
+                break :blk std.fmt.bufPrint(&host_buf, "{s}:{d}", .{ host_name.bytes, port }) catch
+                    return error.NoSpaceLeft;
+            }
+        }
+        break :blk host_name.bytes;
+    };
 
     var payload_hash: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(payload, &payload_hash, .{});
-    var payload_hex: [64]u8 = undefined;
-    _ = std.fmt.bufPrint(&payload_hex, "{s}", .{std.fmt.fmtSliceHexLower(&payload_hash)}) catch
-        return error.NoSpaceLeft;
+    const payload_hex = std.fmt.bytesToHex(payload_hash, .lower);
 
-    const now_sec = std.time.timestamp();
+    const now_sec = std.Io.Clock.real.now(io).toSeconds();
     var amz_date: [16]u8 = undefined;
     var date_stamp: [8]u8 = undefined;
     formatAmzDate(now_sec, &amz_date, &date_stamp) catch return error.RequestFailed;
@@ -228,6 +253,7 @@ fn signedExchange(
 
     var canonical_headers_buf: [512]u8 = undefined;
     var signed_headers_buf: [128]u8 = undefined;
+    const include_content_type = method == .PUT and payload.len != 0;
     const headers_pair = try canonicalHeaders(
         &canonical_headers_buf,
         &signed_headers_buf,
@@ -235,7 +261,7 @@ fn signedExchange(
         content_type,
         &amz_date,
         &payload_hex,
-        method != .GET and method != .HEAD,
+        include_content_type,
     );
 
     var canonical_request_buf: [1024]u8 = undefined;
@@ -249,9 +275,7 @@ fn signedExchange(
 
     var canonical_hash: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(canonical_request, &canonical_hash, .{});
-    var canonical_hex: [64]u8 = undefined;
-    _ = std.fmt.bufPrint(&canonical_hex, "{s}", .{std.fmt.fmtSliceHexLower(&canonical_hash)}) catch
-        return error.NoSpaceLeft;
+    const canonical_hex = std.fmt.bytesToHex(canonical_hash, .lower);
 
     var scope_buf: [128]u8 = undefined;
     const scope = std.fmt.bufPrint(&scope_buf, "{s}/{s}/s3/aws4_request", .{
@@ -270,9 +294,7 @@ fn signedExchange(
     deriveSigningKey(settings.secret_key, &date_stamp, settings.region, &signing_key);
     var signature: [32]u8 = undefined;
     hmacSha256(&signing_key, string_to_sign, &signature);
-    var signature_hex: [64]u8 = undefined;
-    _ = std.fmt.bufPrint(&signature_hex, "{s}", .{std.fmt.fmtSliceHexLower(&signature)}) catch
-        return error.NoSpaceLeft;
+    const signature_hex = std.fmt.bytesToHex(signature, .lower);
 
     var auth_buf: [512]u8 = undefined;
     const authorization = std.fmt.bufPrint(
@@ -281,17 +303,15 @@ fn signedExchange(
         .{ settings.access_key, scope, headers_pair.signed, signature_hex },
     ) catch return error.NoSpaceLeft;
 
-    var headers_storage: [6]std.http.Header = undefined;
+    var headers_storage: [5]std.http.Header = undefined;
     var header_count: usize = 0;
-    headers_storage[header_count] = .{ .name = "host", .value = host };
-    header_count += 1;
     headers_storage[header_count] = .{ .name = "x-amz-date", .value = &amz_date };
     header_count += 1;
     headers_storage[header_count] = .{ .name = "x-amz-content-sha256", .value = &payload_hex };
     header_count += 1;
     headers_storage[header_count] = .{ .name = "authorization", .value = authorization };
     header_count += 1;
-    if (method != .GET and method != .HEAD) {
+    if (include_content_type) {
         headers_storage[header_count] = .{ .name = "content-type", .value = content_type };
         header_count += 1;
     }
