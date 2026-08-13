@@ -1,0 +1,8 @@
+{
+  "name": "poof",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "user": "ubuntu",
+  "install": "zig build --summary all"
+}
