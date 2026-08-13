@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE schema_migrations (
     version integer PRIMARY KEY,
     name text NOT NULL,
@@ -282,5 +280,3 @@ CREATE INDEX automation_events_owner_idx
 CREATE INDEX automation_events_token_idx
     ON automation_events (token_id, created_at DESC, id DESC);
 CREATE INDEX idempotency_expiry_idx ON idempotency_keys (expires_at);
-
-COMMIT;

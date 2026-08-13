@@ -1,5 +1,3 @@
-BEGIN;
-
 INSERT INTO boards (slug, name, description, color, sort_order)
 VALUES (
     'general',
@@ -9,5 +7,3 @@ VALUES (
     0
 )
 ON CONFLICT (slug) DO NOTHING;
-
-COMMIT;

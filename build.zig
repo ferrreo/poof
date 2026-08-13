@@ -72,6 +72,38 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(module_tests).step);
     test_step.dependOn(&b.addRunArtifact(tests).step);
 
+    const integration_options = b.addOptions();
+    integration_options.addOption(
+        []const u8,
+        "database_url",
+        b.option(
+            []const u8,
+            "database-url",
+            "PostgreSQL URL used by integration tests",
+        ) orelse
+            "postgresql://poof:poof@127.0.0.1:5432/poof_test?sslmode=disable",
+    );
+    const integration_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = false,
+            .imports = &.{
+                .{ .name = "poof", .module = application_module },
+                .{
+                    .name = "integration_options",
+                    .module = integration_options.createModule(),
+                },
+            },
+        }),
+    });
+    const integration_step = b.step(
+        "test-integration",
+        "Run live PostgreSQL integration tests",
+    );
+    integration_step.dependOn(&b.addRunArtifact(integration_tests).step);
+
     const format = b.addFmt(.{
         .paths = &.{ "build.zig", "src", "tests" },
         .check = true,
@@ -113,7 +145,7 @@ fn applicationModule(
     pg_dependency: *std.Build.Dependency,
     assets_module: *std.Build.Module,
 ) *std.Build.Module {
-    return b.createModule(.{
+    const module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -129,4 +161,11 @@ fn applicationModule(
             .{ .name = "assets", .module = assets_module },
         },
     });
+    module.addAnonymousImport("migration_001", .{
+        .root_source_file = b.path("migrations/001_initial.sql"),
+    });
+    module.addAnonymousImport("migration_002", .{
+        .root_source_file = b.path("migrations/002_seed_default_board.sql"),
+    });
+    return module;
 }
