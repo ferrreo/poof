@@ -1291,11 +1291,36 @@ pub const Postgres = struct {
         published_only: bool,
         output: []models.Changelog,
     ) models.Error![]models.Changelog {
-        var result = self.pool.query(changelog_select ++
+        return self.listChangelogsPage(
+            allocator,
+            published_only,
+            @intCast(@min(output.len, 100)),
+            0,
+            output,
+        );
+    }
+
+    pub fn listChangelogsPage(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        published_only: bool,
+        limit: u8,
+        offset: u32,
+        output: []models.Changelog,
+    ) models.Error![]models.Changelog {
+        if (limit == 0 or limit > output.len) return error.CapacityExceeded;
+        var result = self.pool.query(
+            \\SELECT c.id, c.slug, COALESCE(u.display_name, u.username),
+            \\       c.title, c.summary, ''::text, c.version,
+            \\       array_to_string(c.tags, ', '), c.published_at
+            \\FROM changelog_entries c
+            \\JOIN users u ON u.id = c.author_id
+            \\
             \\ WHERE (NOT $1 OR c.status = 'published')
             \\ ORDER BY c.published_at DESC NULLS FIRST, c.updated_at DESC, c.id DESC
-            \\ LIMIT 100
-        , .{published_only}) catch return error.DatabaseUnavailable;
+            \\ LIMIT $2 OFFSET $3
+        , .{ published_only, @as(i32, limit), @as(i64, offset) }) catch
+            return error.DatabaseUnavailable;
         defer result.deinit();
         var used: usize = 0;
         while (result.next() catch return error.DatabaseUnavailable) |row| {

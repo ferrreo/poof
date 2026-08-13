@@ -10,6 +10,7 @@ const highlight = @import("../highlight.zig");
 
 const DashboardQuery = struct {
     page: u16 = 1,
+    release_page: u16 = 1,
     q: ?[]const u8 = null,
     status: enum { all, pending, reviewing, planned, in_progress, completed, closed } = .all,
 };
@@ -121,10 +122,12 @@ pub fn dashboard(
     var board_storage: [32]models.Board = undefined;
     const boards = database.listBoards(allocator, &board_storage, true) catch
         return context.empty(.service_unavailable);
-    var changelog_storage: [100]models.Changelog = undefined;
-    const changelogs = database.listChangelogs(
+    var changelog_storage: [20]models.Changelog = undefined;
+    const changelogs = database.listChangelogsPage(
         allocator,
         false,
+        20,
+        (@as(u32, @max(query.release_page, 1)) - 1) * 20,
         &changelog_storage,
     ) catch return context.empty(.service_unavailable);
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
@@ -142,7 +145,12 @@ pub fn dashboard(
         return context.empty(.internal_server_error);
     renderBoards(&writer, boards, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
-    renderChangelogs(&writer, changelogs, token.hiddenInput()) catch
+    renderChangelogs(
+        &writer,
+        changelogs,
+        @max(query.release_page, 1),
+        token.hiddenInput(),
+    ) catch
         return context.empty(.internal_server_error);
     page.end(&writer) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
@@ -599,6 +607,7 @@ fn optionalText(writer: *std.Io.Writer, value: ?[]const u8) !void {
 fn renderChangelogs(
     writer: *std.Io.Writer,
     entries: []const models.Changelog,
+    current_page: u16,
     csrf_input: []const u8,
 ) !void {
     try writer.writeAll("<section class=\"admin-section\" id=\"changelog\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Releases</p><h2>Changelog</h2></div></div>");
@@ -621,7 +630,16 @@ fn renderChangelogs(
             try writer.print("<a class=\"button button-quiet\" href=\"/admin/changelog/{d}/edit\">Edit</a>", .{entry.id});
             try writer.writeAll("</article>");
         }
-        try writer.writeAll("</div>");
+        try writer.writeAll("</div><nav class=\"pagination\" aria-label=\"Admin changelog pages\">");
+        if (current_page > 1) try writer.print(
+            "<a class=\"button button-quiet\" href=\"/admin?release_page={d}#changelog\">← Newer</a>",
+            .{current_page - 1},
+        );
+        if (entries.len == 20) try writer.print(
+            "<a class=\"button button-quiet\" href=\"/admin?release_page={d}#changelog\">Older →</a>",
+            .{current_page + 1},
+        );
+        try writer.writeAll("</nav>");
     }
     try writer.writeAll("<form class=\"stacked-form admin-changelog-form\" method=\"post\" action=\"/admin/changelog\">");
     try writer.writeAll(csrf_input);

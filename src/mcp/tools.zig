@@ -47,7 +47,9 @@ pub const all = [_]Tool{
         .name = "poof_list_changelogs",
         .description = "List published changelog entries.",
         .scope = .read,
-        .schema = empty_schema,
+        .schema =
+        \\{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":50},"offset":{"type":"integer","minimum":0,"maximum":1000000}},"additionalProperties":false}
+        ,
     },
     .{
         .name = "poof_create_issue",

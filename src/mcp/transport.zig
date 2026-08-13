@@ -100,19 +100,21 @@ pub fn handle(
         const arguments = protocol.object(params, "arguments") orelse
             return rpcError(context, &workspace, id, -32602, "Missing tool arguments");
         const mutating = descriptor.scope != .read;
-        if (mutating and !(context.state.database.?.allowUserAction(
-            principal.owner.id,
-            "mcp_mutation",
-            120,
-            60,
-        ) catch return rpcError(
-            context,
-            &workspace,
-            id,
-            -32000,
-            "Mutation rate check failed",
-        ))) {
-            return rpcError(context, &workspace, id, -32029, "Mutation rate limit exceeded");
+        if (mutationLimit(name)) |limit| {
+            if (!(context.state.database.?.allowUserAction(
+                principal.owner.id,
+                limit.action,
+                limit.count,
+                limit.window_seconds,
+            ) catch return rpcError(
+                context,
+                &workspace,
+                id,
+                -32000,
+                "Mutation rate check failed",
+            ))) {
+                return rpcError(context, &workspace, id, -32029, "Mutation rate limit exceeded");
+            }
         }
         const key = if (mutating)
             idempotencyKey(arguments) catch
@@ -387,11 +389,31 @@ fn callTool(
         return;
     }
     if (std.mem.eql(u8, name, "poof_list_changelogs")) {
-        try requireFields(arguments, &.{});
-        var storage: [100]models.Changelog = undefined;
-        const entries = try database.listChangelogs(allocator, true, &storage);
+        try requireFields(arguments, &.{ "limit", "offset" });
+        const limit = protocol.integer(arguments, "limit") orelse 20;
+        const offset = protocol.integer(arguments, "offset") orelse 0;
+        if (limit < 1 or limit > 50 or offset < 0 or offset > 1_000_000) {
+            return error.InvalidArguments;
+        }
+        var storage: [50]models.Changelog = undefined;
+        const entries = try database.listChangelogsPage(
+            allocator,
+            true,
+            @intCast(limit),
+            @intCast(offset),
+            &storage,
+        );
         try protocol.writeToolText(writer, "Published changelogs loaded.");
-        try writer.writeAll(",\"structuredContent\":{\"changelogs\":[");
+        try writer.print(
+            ",\"structuredContent\":{{\"offset\":{d},\"next_offset\":",
+            .{offset},
+        );
+        if (@as(i64, @intCast(entries.len)) == limit) {
+            try writer.print("{d}", .{offset + limit});
+        } else {
+            try writer.writeAll("null");
+        }
+        try writer.writeAll(",\"changelogs\":[");
         for (entries, 0..) |entry, index| {
             if (index != 0) try writer.writeByte(',');
             try writer.print("{{\"id\":{d},\"slug\":", .{entry.id});
@@ -844,6 +866,30 @@ fn safeToReleaseClaim(problem: anyerror) bool {
         => true,
         else => false,
     };
+}
+
+const MutationLimit = struct {
+    action: []const u8,
+    count: i32,
+    window_seconds: i32,
+};
+
+fn mutationLimit(tool_name: []const u8) ?MutationLimit {
+    if (std.mem.eql(u8, tool_name, "poof_create_issue")) {
+        return .{ .action = "issue_create", .count = 5, .window_seconds = 60 };
+    }
+    if (std.mem.eql(u8, tool_name, "poof_set_vote")) {
+        return .{ .action = "vote_change", .count = 60, .window_seconds = 60 };
+    }
+    if (std.mem.eql(u8, tool_name, "poof_add_comment")) {
+        return .{ .action = "comment_create", .count = 20, .window_seconds = 60 };
+    }
+    if (tools.find(tool_name)) |tool| {
+        if (tool.scope != .read) {
+            return .{ .action = "mcp_admin", .count = 120, .window_seconds = 60 };
+        }
+    }
+    return null;
 }
 
 fn digestArguments(tool_name: []const u8, arguments: *const protocol.Value) [32]u8 {

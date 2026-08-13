@@ -32,6 +32,13 @@ pub const DetailDefinition = ploof.Endpoint(.{
     }),
 });
 
+pub const ChangelogDefinition = ploof.Endpoint(.{
+    .query = ploof.Query.typed(struct { page: u16 = 1 }, .{
+        .segments_max = 2,
+        .unknown_fields = .reject,
+    }),
+});
+
 const CreateForm = struct {
     board_id: i64,
     kind: domain.IssueKind,
@@ -508,7 +515,10 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
-pub fn changelog(context: *app_state.Context) app_state.Context.ResponseType {
+pub fn changelog(
+    context: *app_state.Context,
+    input: ChangelogDefinition.InputType,
+) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.textStatic(.service_unavailable, "Poof is not configured");
     const database = app_state.database(context) orelse
@@ -517,10 +527,13 @@ pub fn changelog(context: *app_state.Context) app_state.Context.ResponseType {
         return context.empty(.service_unavailable);
     const allocator = workspace.allocator();
     const current = request.principal(context, allocator) catch null;
-    var changelog_storage: [100]models.Changelog = undefined;
-    const entries = database.listChangelogs(
+    const changelog_page = @max(input.query.page, 1);
+    var changelog_storage: [20]models.Changelog = undefined;
+    const entries = database.listChangelogsPage(
         allocator,
         true,
+        20,
+        (@as(u32, changelog_page) - 1) * 20,
         &changelog_storage,
     ) catch return context.empty(.service_unavailable);
     var writer = workspace.writer();
@@ -543,7 +556,17 @@ pub fn changelog(context: *app_state.Context) app_state.Context.ResponseType {
             return context.empty(.internal_server_error);
         for (entries) |entry| renderChangelogCard(&writer, entry) catch
             return context.empty(.internal_server_error);
-        writer.writeAll("</section>") catch return context.empty(.internal_server_error);
+        writer.writeAll("<nav class=\"pagination\" aria-label=\"Changelog pages\">") catch
+            return context.empty(.internal_server_error);
+        if (changelog_page > 1) writer.print(
+            "<a class=\"button button-quiet\" href=\"/changelog?page={d}\">← Newer</a>",
+            .{changelog_page - 1},
+        ) catch return context.empty(.internal_server_error);
+        if (entries.len == 20) writer.print(
+            "<a class=\"button button-quiet\" href=\"/changelog?page={d}\">Older →</a>",
+            .{changelog_page + 1},
+        ) catch return context.empty(.internal_server_error);
+        writer.writeAll("</nav></section>") catch return context.empty(.internal_server_error);
     }
     page.end(&writer) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
@@ -781,6 +804,17 @@ fn renderDiscussion(
                 if (reply.parent_id != comment_value.id) continue;
                 try renderComment(writer, reply, true, null);
             }
+        }
+        for (comments) |reply| {
+            const parent_id = reply.parent_id orelse continue;
+            var parent_visible = false;
+            for (comments) |candidate| {
+                if (candidate.id == parent_id and candidate.parent_id == null) {
+                    parent_visible = true;
+                    break;
+                }
+            }
+            if (!parent_visible) try renderComment(writer, reply, true, null);
         }
         try writer.writeAll("</div>");
         if (comment_total > 10) {

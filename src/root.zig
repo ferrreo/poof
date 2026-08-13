@@ -89,7 +89,10 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         public_handlers.CommentDefinition.handle(public_handlers.comment),
     ),
     ploof.get("/roadmap", public_handlers.roadmap),
-    ploof.get("/changelog", public_handlers.changelog),
+    ploof.get(
+        "/changelog",
+        public_handlers.ChangelogDefinition.handle(public_handlers.changelog),
+    ),
     ploof.get("/changelog/:slug", public_handlers.changelogDetail),
     ploof.get("/me", public_handlers.me),
     ploof.get(
