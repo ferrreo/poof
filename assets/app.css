@@ -1067,10 +1067,10 @@ input[type="checkbox"] {
 }
 
 .admin-card-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-xs);
+  align-items: end;
 }
 
 .admin-card:not(:has(.admin-card-tools)) {
@@ -1085,12 +1085,11 @@ input[type="checkbox"] {
 }
 
 .board-edit {
-  flex: 1 1 12rem;
   display: grid;
-  grid-template-columns: 1fr 1fr 1.5fr 4.5rem auto;
+  grid-template-columns: minmax(6rem, 1fr) minmax(6rem, 1fr) minmax(8rem, 1.5fr) 4.5rem auto;
   gap: var(--space-xs);
   align-items: end;
-  min-width: min(100%, 20rem);
+  min-width: 0;
 }
 
 .board-archive,
