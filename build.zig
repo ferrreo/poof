@@ -68,6 +68,8 @@ pub fn build(b: *std.Build) void {
         }),
     });
     const test_step = b.step("test", "Run Poof tests");
+    const module_tests = b.addTest(.{ .root_module = application_module });
+    test_step.dependOn(&b.addRunArtifact(module_tests).step);
     test_step.dependOn(&b.addRunArtifact(tests).step);
 
     const format = b.addFmt(.{

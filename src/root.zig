@@ -1,5 +1,7 @@
 const ploof = @import("ploof");
 
+pub const config = @import("config.zig");
+pub const domain = @import("domain.zig");
 pub const Assets = ploof.Asset.Bundle(@import("assets"));
 
 pub const State = struct {
@@ -59,3 +61,8 @@ pub const TestApp = ploof.Application(.{
         ploof.get("/ready", Ready.handle),
     },
 });
+
+test {
+    _ = config;
+    _ = domain;
+}
