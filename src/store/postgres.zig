@@ -182,16 +182,29 @@ pub const Postgres = struct {
             return error.Conflict;
         }
         const expiry: ?i32 = if (expires_days) |days| @intCast(days) else null;
-        var row = (self.pool.row(
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+        _ = connection.exec(
+            "SELECT pg_advisory_xact_lock(5790053260621242964)",
+            .{},
+        ) catch return error.DatabaseUnavailable;
+        var row = (connection.row(
             \\INSERT INTO api_tokens (
             \\    owner_id, lookup_prefix, token_digest, label, scopes, expires_at
-            \\) VALUES (
+            \\)
+            \\SELECT
             \\    $1, $2, $3, $4, $5,
             \\    CASE WHEN $6::integer IS NULL
             \\         THEN NULL
             \\         ELSE now() + make_interval(days => $6)
             \\    END
-            \\)
+            \\WHERE (
+            \\    SELECT count(*) FROM api_tokens
+            \\    WHERE owner_id = $1 AND revoked_at IS NULL
+            \\      AND (expires_at IS NULL OR expires_at > now())
+            \\) < 10
             \\RETURNING id, lookup_prefix, label, scopes, expires_at,
             \\          revoked_at IS NOT NULL, last_used_at, created_at
         , .{
@@ -201,9 +214,11 @@ pub const Postgres = struct {
             label,
             @as(i64, @intCast(scopes.bits)),
             expiry,
-        }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
-        defer row.deinit() catch {};
-        return readApiTokenQuery(&row, allocator, 0);
+        }) catch return error.DatabaseUnavailable) orelse return error.Conflict;
+        const token = try readApiTokenQuery(&row, allocator, 0);
+        row.deinit() catch return error.DatabaseUnavailable;
+        connection.commit() catch return error.DatabaseUnavailable;
+        return token;
     }
 
     pub fn listApiTokens(
@@ -217,7 +232,8 @@ pub const Postgres = struct {
             \\       revoked_at IS NOT NULL, last_used_at, created_at
             \\FROM api_tokens
             \\WHERE owner_id = $1
-            \\ORDER BY created_at DESC
+            \\ORDER BY (revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())) DESC,
+            \\         created_at DESC
             \\LIMIT 100
         , .{owner_id}) catch return error.DatabaseUnavailable;
         defer result.deinit();
@@ -770,6 +786,16 @@ pub const Postgres = struct {
         issue_id: i64,
         output: []models.Comment,
     ) models.Error![]models.Comment {
+        return self.listCommentsPage(allocator, issue_id, 0, output);
+    }
+
+    pub fn listCommentsPage(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        issue_id: i64,
+        offset: u32,
+        output: []models.Comment,
+    ) models.Error![]models.Comment {
         var result = self.pool.query(
             \\SELECT c.id, c.issue_id, c.author_id,
             \\       COALESCE(u.display_name, u.username), c.parent_id,
@@ -779,7 +805,12 @@ pub const Postgres = struct {
             \\WHERE c.issue_id = $1 AND c.deleted_at IS NULL
             \\ORDER BY c.created_at, c.id
             \\LIMIT $2
-        , .{ issue_id, @as(i32, @intCast(output.len)) }) catch
+            \\OFFSET $3
+        , .{
+            issue_id,
+            @as(i32, @intCast(output.len)),
+            @as(i64, offset),
+        }) catch
             return error.DatabaseUnavailable;
         defer result.deinit();
         var used: usize = 0;

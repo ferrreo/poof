@@ -148,6 +148,46 @@ test "PostgreSQL migrations and feedback lifecycle" {
         "concurrent-claim",
         claim_digest,
     );
+    var extra_index: u8 = 1;
+    while (extra_index <= 9) : (extra_index += 1) {
+        var extra = poof.api_token.Generated.fromRaw(
+            [_]u8{extra_index} ** poof.api_token.lookup_random_bytes,
+            [_]u8{0x73} ** poof.api_token.secret_random_bytes,
+            pepper,
+        );
+        defer extra.clear();
+        var label_storage: [32]u8 = undefined;
+        const label = try std.fmt.bufPrint(&label_storage, "Extra token {d}", .{extra_index});
+        const created = try database.createApiToken(
+            std.testing.allocator,
+            admin.id,
+            &extra.lookup,
+            extra.digest,
+            label,
+            scopes,
+            30,
+        );
+        std.testing.allocator.free(created.lookup_prefix);
+        std.testing.allocator.free(created.label);
+    }
+    var overflow_token = poof.api_token.Generated.fromRaw(
+        [_]u8{0xee} ** poof.api_token.lookup_random_bytes,
+        [_]u8{0xef} ** poof.api_token.secret_random_bytes,
+        pepper,
+    );
+    defer overflow_token.clear();
+    try std.testing.expectError(
+        error.Conflict,
+        database.createApiToken(
+            arena,
+            admin.id,
+            &overflow_token.lookup,
+            overflow_token.digest,
+            "Token eleven",
+            scopes,
+            30,
+        ),
+    );
     try database.revokeApiToken(admin.id, stored_token.id);
     try std.testing.expectError(
         error.NotFound,

@@ -100,6 +100,20 @@ pub fn handle(
         const arguments = protocol.object(params, "arguments") orelse
             return rpcError(context, &workspace, id, -32602, "Missing tool arguments");
         const mutating = descriptor.scope != .read;
+        if (mutating and !(context.state.database.?.allowUserAction(
+            principal.owner.id,
+            "mcp_mutation",
+            120,
+            60,
+        ) catch return rpcError(
+            context,
+            &workspace,
+            id,
+            -32000,
+            "Mutation rate check failed",
+        ))) {
+            return rpcError(context, &workspace, id, -32029, "Mutation rate limit exceeded");
+        }
         const key = if (mutating)
             idempotencyKey(arguments) catch
                 return rpcError(context, &workspace, id, -32602, "Missing idempotency key")
@@ -169,12 +183,14 @@ pub fn handle(
             name,
             arguments,
         ) catch |problem| {
-            if (key) |request_key| context.state.database.?.releaseIdempotency(
-                principal.token.id,
-                name,
-                request_key,
-                request_digest.?,
-            );
+            if (key) |request_key| if (safeToReleaseClaim(problem)) {
+                context.state.database.?.releaseIdempotency(
+                    principal.token.id,
+                    name,
+                    request_key,
+                    request_digest.?,
+                );
+            };
             context.state.database.?.recordAutomation(
                 principal.token.id,
                 principal.owner.id,
@@ -306,14 +322,30 @@ fn callTool(
         return;
     }
     if (std.mem.eql(u8, name, "poof_get_issue")) {
-        try requireFields(arguments, &.{"issue_id"});
+        try requireFields(arguments, &.{ "issue_id", "comments_offset" });
         const issue_id = try positiveId(arguments, "issue_id");
+        const comments_offset = protocol.integer(arguments, "comments_offset") orelse 0;
+        if (comments_offset < 0 or comments_offset > 1_000_000) {
+            return error.InvalidArguments;
+        }
         const issue = try database.getIssue(allocator, issue_id);
-        var comment_storage: [20]models.Comment = undefined;
-        const comments = try database.listComments(allocator, issue_id, &comment_storage);
+        var comment_storage: [10]models.Comment = undefined;
+        const comments = try database.listCommentsPage(
+            allocator,
+            issue_id,
+            @intCast(comments_offset),
+            &comment_storage,
+        );
         try protocol.writeToolText(writer, "Issue loaded.");
         try writer.writeAll(",\"structuredContent\":{\"issue\":");
         try writeIssue(writer, issue);
+        try writer.print(",\"comments_offset\":{d},\"comments_next_offset\":", .{comments_offset});
+        const next_comment_offset = comments_offset + @as(i64, @intCast(comments.len));
+        if (next_comment_offset < issue.comment_count) {
+            try writer.print("{d}", .{next_comment_offset});
+        } else {
+            try writer.writeAll("null");
+        }
         try writer.writeAll(",\"comments\":[");
         for (comments, 0..) |comment, index| {
             if (index != 0) try writer.writeByte(',');
@@ -797,6 +829,20 @@ fn toolMessage(problem: anyerror) []const u8 {
         error.Locked => "The issue is locked",
         error.CapacityExceeded => "The result exceeds a bounded limit",
         else => "Tool execution failed",
+    };
+}
+
+fn safeToReleaseClaim(problem: anyerror) bool {
+    return switch (problem) {
+        error.InvalidArguments,
+        error.ConfirmationRequired,
+        error.NotFound,
+        error.Conflict,
+        error.Locked,
+        error.CapacityExceeded,
+        error.UnknownTool,
+        => true,
+        else => false,
     };
 }
 

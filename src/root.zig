@@ -72,8 +72,14 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         "/issues",
         public_handlers.CreateDefinition.handle(public_handlers.create),
     ),
-    ploof.get("/issues/:id", public_handlers.detail),
-    ploof.get("/issues/:id/:slug", public_handlers.detail),
+    ploof.get(
+        "/issues/:id",
+        public_handlers.DetailDefinition.handle(public_handlers.detail),
+    ),
+    ploof.get(
+        "/issues/:id/:slug",
+        public_handlers.DetailDefinition.handle(public_handlers.detail),
+    ),
     ploof.post(
         "/issues/:id/vote",
         public_handlers.VoteDefinition.handle(public_handlers.vote),

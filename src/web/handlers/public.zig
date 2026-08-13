@@ -25,6 +25,13 @@ pub const ListDefinition = ploof.Endpoint(.{
     }),
 });
 
+pub const DetailDefinition = ploof.Endpoint(.{
+    .query = ploof.Query.typed(struct { comments_page: u16 = 1 }, .{
+        .segments_max = 2,
+        .unknown_fields = .reject,
+    }),
+});
+
 const CreateForm = struct {
     board_id: i64,
     kind: domain.IssueKind,
@@ -142,7 +149,10 @@ fn renderIssueList(
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
-pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
+pub fn detail(
+    context: *app_state.Context,
+    input: DetailDefinition.InputType,
+) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.textStatic(.service_unavailable, "Poof is not configured");
     const database = app_state.database(context) orelse
@@ -166,8 +176,14 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
             return context.empty(.service_unavailable)
     else
         false;
-    var comment_storage: [20]models.Comment = undefined;
-    const comments = database.listComments(allocator, issue_id, &comment_storage) catch
+    const comments_page = @max(input.query.comments_page, 1);
+    var comment_storage: [10]models.Comment = undefined;
+    const comments = database.listCommentsPage(
+        allocator,
+        issue_id,
+        (@as(u32, comments_page) - 1) * 10,
+        &comment_storage,
+    ) catch
         return context.empty(.service_unavailable);
 
     const requested_slug = context.request.param("slug") orelse "";
@@ -225,6 +241,9 @@ pub fn detail(context: *app_state.Context) app_state.Context.ResponseType {
     renderDiscussion(
         &writer,
         comments,
+        issue.comment_count,
+        comments_page,
+        issue,
         if (csrf_token) |*token| token.hiddenInput() else null,
         issue.locked,
     ) catch
@@ -746,6 +765,9 @@ fn renderDiagnostics(writer: *std.Io.Writer, issue: models.Issue) !void {
 fn renderDiscussion(
     writer: *std.Io.Writer,
     comments: []const models.Comment,
+    comment_total: i64,
+    comments_page: u16,
+    issue: models.Issue,
     csrf_input: ?[]const u8,
     locked: bool,
 ) !void {
@@ -761,6 +783,24 @@ fn renderDiscussion(
             }
         }
         try writer.writeAll("</div>");
+        if (comment_total > 10) {
+            try writer.writeAll("<nav class=\"pagination\" aria-label=\"Comment pages\">");
+            var base: [256]u8 = undefined;
+            const url = try page.issueUrl(&base, issue.id, issue.slug);
+            if (comments_page > 1) {
+                try writer.print("<a class=\"button button-quiet\" href=\"{s}?comments_page={d}#discussion\">← Newer</a>", .{
+                    url,
+                    comments_page - 1,
+                });
+            }
+            if (@as(i64, comments_page) * 10 < comment_total) {
+                try writer.print("<a class=\"button button-quiet\" href=\"{s}?comments_page={d}#discussion\">Older →</a>", .{
+                    url,
+                    comments_page + 1,
+                });
+            }
+            try writer.writeAll("</nav>");
+        }
     }
     if (locked) {
         try writer.writeAll("<p class=\"notice\">This discussion is locked.</p></section>");

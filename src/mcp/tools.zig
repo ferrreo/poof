@@ -175,7 +175,7 @@ const empty_schema =
 ;
 
 const id_schema =
-    \\{"type":"object","required":["issue_id"],"properties":{"issue_id":{"type":"integer","minimum":1}},"additionalProperties":false}
+    \\{"type":"object","required":["issue_id"],"properties":{"issue_id":{"type":"integer","minimum":1},"comments_offset":{"type":"integer","minimum":0,"maximum":1000000}},"additionalProperties":false}
 ;
 
 test "tool list excludes admin capabilities from member tokens" {
