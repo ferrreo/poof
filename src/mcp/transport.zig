@@ -331,7 +331,7 @@ fn callTool(
             return error.InvalidArguments;
         }
         const issue = try database.getIssue(allocator, issue_id);
-        var comment_storage: [10]models.Comment = undefined;
+        var comment_storage: [5]models.Comment = undefined;
         const comments = try database.listCommentsPage(
             allocator,
             issue_id,

@@ -184,11 +184,11 @@ pub fn detail(
     else
         false;
     const comments_page = @max(input.query.comments_page, 1);
-    var comment_storage: [10]models.Comment = undefined;
+    var comment_storage: [5]models.Comment = undefined;
     const comments = database.listCommentsPage(
         allocator,
         issue_id,
-        (@as(u32, comments_page) - 1) * 10,
+        (@as(u32, comments_page) - 1) * 5,
         &comment_storage,
     ) catch
         return context.empty(.service_unavailable);
@@ -817,7 +817,7 @@ fn renderDiscussion(
             if (!parent_visible) try renderComment(writer, reply, true, null);
         }
         try writer.writeAll("</div>");
-        if (comment_total > 10) {
+        if (comment_total > 5) {
             try writer.writeAll("<nav class=\"pagination\" aria-label=\"Comment pages\">");
             var base: [256]u8 = undefined;
             const url = try page.issueUrl(&base, issue.id, issue.slug);
@@ -827,7 +827,7 @@ fn renderDiscussion(
                     comments_page - 1,
                 });
             }
-            if (@as(i64, comments_page) * 10 < comment_total) {
+            if (@as(i64, comments_page) * 5 < comment_total) {
                 try writer.print("<a class=\"button button-quiet\" href=\"{s}?comments_page={d}#discussion\">Older →</a>", .{
                     url,
                     comments_page + 1,
