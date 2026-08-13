@@ -20,6 +20,15 @@ pub const DiscordProfile = struct {
     role: domain.Role,
 };
 
+pub const OAuthState = struct {
+    return_to: []const u8,
+};
+
+pub const SessionPrincipal = struct {
+    user: User,
+    session_id: [16]u8,
+};
+
 pub const Board = struct {
     id: i64,
     slug: []const u8,

@@ -51,6 +51,43 @@ test "PostgreSQL migrations and feedback lifecycle" {
     });
     try std.testing.expectEqual(poof.domain.Role.member, member.role);
 
+    var oauth_pair = poof.oauth_state.Pair.fromRaw(
+        [_]u8{0x11} ** 32,
+        [_]u8{0x22} ** 32,
+    );
+    defer oauth_pair.clear();
+    try database.createOAuthState(
+        oauth_pair.state.hash(),
+        oauth_pair.cookie.hash(),
+        "/issues/new",
+    );
+    const oauth = try database.consumeOAuthState(
+        arena,
+        oauth_pair.state.hash(),
+        oauth_pair.cookie.hash(),
+    );
+    try std.testing.expectEqualStrings("/issues/new", oauth.return_to);
+    try std.testing.expectError(
+        error.NotFound,
+        database.consumeOAuthState(
+            arena,
+            oauth_pair.state.hash(),
+            oauth_pair.cookie.hash(),
+        ),
+    );
+
+    var session_token = poof.session.Token.fromRaw([_]u8{0x33} ** 32);
+    defer session_token.clear();
+    try database.createSession(session_token.hash(), admin.id, 30);
+    const principal = try database.sessionPrincipal(arena, session_token.hash());
+    try std.testing.expectEqual(admin.id, principal.user.id);
+    try std.testing.expectEqual(poof.domain.Role.admin, principal.user.role);
+    try database.revokeSession(session_token.hash());
+    try std.testing.expectError(
+        error.NotFound,
+        database.sessionPrincipal(arena, session_token.hash()),
+    );
+
     var board_storage: [8]poof.store.Board = undefined;
     const boards = try database.listBoards(arena, &board_storage, false);
     try std.testing.expectEqual(@as(usize, 1), boards.len);

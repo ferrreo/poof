@@ -60,6 +60,108 @@ pub const Postgres = struct {
         return readUser(&row, allocator);
     }
 
+    pub fn createOAuthState(
+        self: *Postgres,
+        state_hash: [32]u8,
+        cookie_hash: [32]u8,
+        return_to: []const u8,
+    ) models.Error!void {
+        _ = self.pool.exec(
+            \\INSERT INTO oauth_states (
+            \\    state_hash, cookie_hash, return_to, expires_at
+            \\) VALUES ($1, $2, $3, now() + interval '10 minutes')
+        , .{
+            pg.Binary{ .data = &state_hash },
+            pg.Binary{ .data = &cookie_hash },
+            return_to,
+        }) catch return error.DatabaseUnavailable;
+    }
+
+    pub fn consumeOAuthState(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        state_hash: [32]u8,
+        cookie_hash: [32]u8,
+    ) models.Error!models.OAuthState {
+        var row = (self.pool.row(
+            \\UPDATE oauth_states SET consumed_at = now()
+            \\WHERE state_hash = $1
+            \\  AND cookie_hash = $2
+            \\  AND consumed_at IS NULL
+            \\  AND expires_at > now()
+            \\RETURNING return_to
+        , .{
+            pg.Binary{ .data = &state_hash },
+            pg.Binary{ .data = &cookie_hash },
+        }) catch return error.DatabaseUnavailable) orelse return error.NotFound;
+        defer row.deinit() catch {};
+        return .{ .return_to = try copyQueryColumn(&row, allocator, 0) };
+    }
+
+    pub fn createSession(
+        self: *Postgres,
+        token_hash: [32]u8,
+        user_id: i64,
+        ttl_days: u16,
+    ) models.Error!void {
+        _ = self.pool.exec(
+            \\INSERT INTO sessions (token_hash, user_id, expires_at)
+            \\VALUES ($1, $2, now() + make_interval(days => $3))
+        , .{
+            pg.Binary{ .data = &token_hash },
+            user_id,
+            @as(i32, ttl_days),
+        }) catch return error.DatabaseUnavailable;
+    }
+
+    pub fn sessionPrincipal(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        token_hash: [32]u8,
+    ) models.Error!models.SessionPrincipal {
+        var row = (self.pool.row(
+            \\WITH active_session AS (
+            \\    UPDATE sessions SET last_seen_at = now()
+            \\    WHERE token_hash = $1
+            \\      AND revoked_at IS NULL
+            \\      AND expires_at > now()
+            \\    RETURNING id, user_id
+            \\)
+            \\SELECT s.id, u.id, u.discord_id, u.username, u.display_name,
+            \\       u.avatar_hash, u.role, u.disabled_at IS NOT NULL,
+            \\       u.created_at, u.last_login_at
+            \\FROM active_session s
+            \\JOIN users u ON u.id = s.user_id
+            \\WHERE u.disabled_at IS NULL
+        , .{pg.Binary{ .data = &token_hash }}) catch
+            return error.DatabaseUnavailable) orelse return error.NotFound;
+        defer row.deinit() catch {};
+        const session_bytes = row.get([]u8, 0) catch return error.InvalidDatabaseData;
+        if (session_bytes.len != 16) return error.InvalidDatabaseData;
+        return .{
+            .session_id = session_bytes[0..16].*,
+            .user = try readUserOffset(&row, allocator, 1),
+        };
+    }
+
+    pub fn revokeSession(
+        self: *Postgres,
+        token_hash: [32]u8,
+    ) models.Error!void {
+        _ = self.pool.exec(
+            \\UPDATE sessions SET revoked_at = now()
+            \\WHERE token_hash = $1 AND revoked_at IS NULL
+        , .{pg.Binary{ .data = &token_hash }}) catch return error.DatabaseUnavailable;
+    }
+
+    pub fn cleanupExpiredAuth(self: *Postgres) models.Error!void {
+        _ = self.pool.exec(
+            \\DELETE FROM oauth_states WHERE expires_at < now() - interval '1 day';
+            \\DELETE FROM sessions
+            \\WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days'
+        , .{}) catch return error.DatabaseUnavailable;
+    }
+
     pub fn listBoards(
         self: *Postgres,
         allocator: std.mem.Allocator,
@@ -338,6 +440,25 @@ fn readUser(
         .disabled = row.get(bool, 6) catch return error.InvalidDatabaseData,
         .created_at_us = row.get(i64, 7) catch return error.InvalidDatabaseData,
         .last_login_at_us = row.get(i64, 8) catch return error.InvalidDatabaseData,
+    };
+}
+
+fn readUserOffset(
+    row: *pg.QueryRow,
+    allocator: std.mem.Allocator,
+    offset: usize,
+) models.Error!models.User {
+    return .{
+        .id = row.get(i64, offset) catch return error.InvalidDatabaseData,
+        .discord_id = try copyQueryColumn(row, allocator, offset + 1),
+        .username = try copyQueryColumn(row, allocator, offset + 2),
+        .display_name = try copyOptionalQueryColumn(row, allocator, offset + 3),
+        .avatar_hash = try copyOptionalQueryColumn(row, allocator, offset + 4),
+        .role = try models.parseRole(row.get([]const u8, offset + 5) catch
+            return error.InvalidDatabaseData),
+        .disabled = row.get(bool, offset + 6) catch return error.InvalidDatabaseData,
+        .created_at_us = row.get(i64, offset + 7) catch return error.InvalidDatabaseData,
+        .last_login_at_us = row.get(i64, offset + 8) catch return error.InvalidDatabaseData,
     };
 }
 
