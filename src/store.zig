@@ -108,6 +108,7 @@ pub const IssueFilter = struct {
     kind: ?domain.IssueKind = null,
     status: ?domain.IssueStatus = null,
     query: ?[]const u8 = null,
+    completed_since_days: ?u16 = null,
     sort: IssueSort = .top,
     limit: u8 = 20,
     offset: u32 = 0,

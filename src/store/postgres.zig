@@ -493,6 +493,7 @@ pub const Postgres = struct {
             kind,
             status,
             query,
+            if (filter.completed_since_days) |days| @as(?i32, @intCast(days)) else null,
             @tagName(filter.sort),
             @as(i32, filter.limit),
             @as(i64, filter.offset),
@@ -513,10 +514,43 @@ pub const Postgres = struct {
             kind,
             status,
             query,
+            if (filter.completed_since_days) |days| @as(?i32, @intCast(days)) else null,
         }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
         defer count_row.deinit() catch {};
         const total = count_row.get(i64, 0) catch return error.InvalidDatabaseData;
         return .{ .items = output[0..used], .total = total };
+    }
+
+    pub fn listUserIssues(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        user_id: i64,
+        output: []models.IssueSummary,
+    ) models.Error![]models.IssueSummary {
+        var result = self.pool.query(
+            \\SELECT DISTINCT i.id, i.slug, b.name, i.board_id,
+            \\       COALESCE(u.display_name, u.username),
+            \\       i.kind, i.status, i.priority, i.title, i.pinned, i.locked,
+            \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
+            \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
+            \\       i.created_at
+            \\FROM issues i
+            \\JOIN boards b ON b.id = i.board_id
+            \\JOIN users u ON u.id = i.author_id
+            \\LEFT JOIN issue_votes own_vote
+            \\       ON own_vote.issue_id = i.id AND own_vote.user_id = $1
+            \\WHERE i.author_id = $1 OR own_vote.user_id = $1
+            \\ORDER BY i.created_at DESC, i.id DESC
+            \\LIMIT 100
+        , .{user_id}) catch return error.DatabaseUnavailable;
+        defer result.deinit();
+        var used: usize = 0;
+        while (result.next() catch return error.DatabaseUnavailable) |row| {
+            if (used == output.len) return error.CapacityExceeded;
+            output[used] = try readIssueSummary(row, allocator);
+            used += 1;
+        }
+        return output[0..used];
     }
 
     pub fn setVote(
@@ -907,6 +941,11 @@ const issue_filter =
     \\       OR to_tsvector('simple', i.title || ' ' || i.body_markdown)
     \\          @@ websearch_to_tsquery('simple', $4)
     \\   )
+    \\   AND (
+    \\       $5::integer IS NULL
+    \\       OR i.status <> 'completed'
+    \\       OR i.completed_at > now() - make_interval(days => $5)
+    \\   )
 ;
 
 const issue_list_sql =
@@ -918,11 +957,11 @@ const issue_list_sql =
     \\       i.created_at
 ++ issue_filter ++
     \\ ORDER BY i.pinned DESC,
-    \\   CASE WHEN $5 = 'top' THEN
+    \\   CASE WHEN $6 = 'top' THEN
     \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id)
     \\   END DESC,
     \\   i.created_at DESC, i.id DESC
-    \\ LIMIT $6 OFFSET $7
+    \\ LIMIT $7 OFFSET $8
 ;
 
 const issue_count_sql = "SELECT count(*)" ++ issue_filter;

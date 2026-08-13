@@ -860,6 +860,35 @@ h2 {
   padding: 72px 0 100px;
 }
 
+.profile-page {
+  width: min(900px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 72px 0 100px;
+}
+
+.profile-page > header {
+  margin-bottom: 28px;
+}
+
+.profile-page h1 {
+  margin: 7px 0 12px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(48px, 7vw, 72px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.profile-page > header > p {
+  color: var(--muted);
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
 .developer-page > header {
   margin-bottom: 30px;
 }
@@ -1297,7 +1326,8 @@ footer a {
   .changelog-list,
   .changelog-detail,
   .admin-shell,
-  .developer-page {
+  .developer-page,
+  .profile-page {
     width: min(100% - 24px, 1180px);
   }
 

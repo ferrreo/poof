@@ -326,6 +326,60 @@ pub fn comment(
     return redirectToIssue(context, database, workspace.allocator(), issue_id, value);
 }
 
+pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse
+        return context.empty(.service_unavailable);
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    const allocator = workspace.allocator();
+    const current = (request.principal(context, allocator) catch
+        return context.empty(.service_unavailable)) orelse
+        return request.redirect(context, .see_other, "/auth/discord?return_to=/me");
+    var issue_storage: [100]models.IssueSummary = undefined;
+    const issues = database.listUserIssues(
+        allocator,
+        current.user.id,
+        &issue_storage,
+    ) catch return context.empty(.service_unavailable);
+    const csrf_token = csrf.prepare(context) catch
+        return context.empty(.internal_server_error);
+    var writer = workspace.writer();
+    page.begin(&writer, settings, "My activity", .none, &current.user) catch
+        return context.empty(.internal_server_error);
+    writer.writeAll("<section class=\"profile-page\"><header><p class=\"kicker\">Your Poof profile</p><h1>") catch
+        return context.empty(.internal_server_error);
+    highlight.escapeHtml(
+        &writer,
+        current.user.display_name orelse current.user.username,
+    ) catch return context.empty(.internal_server_error);
+    writer.writeAll("</h1><p>Submitted and supported feedback appears here.</p><div class=\"profile-actions\">") catch
+        return context.empty(.internal_server_error);
+    writer.writeAll("<a class=\"button button-quiet\" href=\"/settings/developer/tokens\">Developer tokens</a>") catch
+        return context.empty(.internal_server_error);
+    writer.writeAll("<form method=\"post\" action=\"/auth/logout\">") catch
+        return context.empty(.internal_server_error);
+    writer.writeAll(csrf_token.hiddenInput()) catch return context.empty(.internal_server_error);
+    writer.writeAll("<button class=\"button button-quiet\" type=\"submit\">Sign out</button></form></div></header>") catch
+        return context.empty(.internal_server_error);
+    if (issues.len == 0) {
+        writer.writeAll("<div class=\"empty-card\"><h2>No activity yet.</h2><p>Submit or vote on feedback to see it here.</p></div>") catch
+            return context.empty(.internal_server_error);
+    } else {
+        writer.writeAll("<div class=\"issue-list\">") catch
+            return context.empty(.internal_server_error);
+        for (issues) |issue| renderIssueCard(&writer, issue) catch
+            return context.empty(.internal_server_error);
+        writer.writeAll("</div>") catch return context.empty(.internal_server_error);
+    }
+    writer.writeAll("</section>") catch return context.empty(.internal_server_error);
+    page.end(&writer) catch return context.empty(.internal_server_error);
+    var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
+    csrf.attach(&response, &csrf_token);
+    return response;
+}
+
 pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.textStatic(.service_unavailable, "Poof is not configured");
@@ -349,6 +403,7 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
     }, &progress_storage) catch return context.empty(.service_unavailable);
     const completed = database.listIssues(allocator, .{
         .status = .completed,
+        .completed_since_days = 90,
         .limit = 20,
     }, &completed_storage) catch return context.empty(.service_unavailable);
 

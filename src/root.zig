@@ -84,6 +84,7 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
     ploof.get("/roadmap", public_handlers.roadmap),
     ploof.get("/changelog", public_handlers.changelog),
     ploof.get("/changelog/:slug", public_handlers.changelogDetail),
+    ploof.get("/me", public_handlers.me),
     ploof.get("/admin", admin_handlers.dashboard),
     ploof.post(
         "/admin/issues/:id",
