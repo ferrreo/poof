@@ -292,6 +292,99 @@ h2 {
   text-decoration: none;
 }
 
+.markdown {
+  color: #303029;
+  font-size: 15px;
+  line-height: 1.72;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  margin: 1.5em 0 0.55em;
+  font-family: inherit;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.markdown p {
+  margin: 0 0 1em;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0 0 1em;
+  padding-left: 1.5em;
+}
+
+.markdown blockquote {
+  margin: 1.2em 0;
+  padding: 2px 0 2px 18px;
+  color: var(--muted);
+  border-left: 3px solid var(--accent);
+}
+
+.markdown :not(pre) > code {
+  padding: 0.16em 0.38em;
+  color: var(--accent-deep);
+  background: var(--accent-wash);
+  border-radius: 5px;
+  font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.code-block {
+  margin: 1.25em 0;
+  padding: 18px 20px;
+  overflow-x: auto;
+  color: #d9dde8;
+  background: #191b22;
+  border: 1px solid #292c36;
+  border-radius: 13px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+  font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 2;
+}
+
+.zhl-comment {
+  color: #858b9b;
+}
+
+.zhl-keyword,
+.zhl-storage {
+  color: #d9a7ff;
+}
+
+.zhl-string,
+.zhl-regexp {
+  color: #b8df8e;
+}
+
+.zhl-number,
+.zhl-constant {
+  color: #f2b880;
+}
+
+.zhl-function,
+.zhl-type {
+  color: #87c7ff;
+}
+
+.zhl-variable,
+.zhl-property {
+  color: #e6e9f2;
+}
+
+.zhl-operator,
+.zhl-punctuation {
+  color: #aeb5c7;
+}
+
+.zhl-builtin,
+.zhl-tag {
+  color: #ff9fa9;
+}
+
 footer {
   width: min(1030px, calc(100% - 40px));
   margin: 0 auto;

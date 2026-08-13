@@ -10,6 +10,8 @@ pub const session = @import("auth/session.zig");
 pub const store = @import("store.zig");
 pub const postgres = @import("store/postgres.zig");
 pub const store_migrations = @import("store/migrations.zig");
+pub const highlight = @import("web/highlight.zig");
+pub const markdown = @import("web/markdown.zig");
 pub const Assets = ploof.Asset.Bundle(@import("assets"));
 
 pub const State = struct {
@@ -81,4 +83,6 @@ test {
     _ = store;
     _ = postgres;
     _ = store_migrations;
+    _ = highlight;
+    _ = markdown;
 }
