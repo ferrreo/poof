@@ -1,0 +1,20 @@
+grammar "source.python" {
+    name "Python";
+    scope root = "source.python";
+
+    context main {
+        line_comment "#" scope "comment.line.number-sign.python";
+        string "\"" escape "\\" scope "string.quoted.double.python";
+        string "'" escape "\\" scope "string.quoted.single.python";
+        number generic scope "constant.numeric.python";
+        keywords "and as assert async await break class continue def del elif else except False finally" scope "keyword.control.python";
+        keywords "for from global if import in is lambda None nonlocal not or pass raise return True" scope "keyword.control.python";
+        keywords "try while with yield match case self cls" scope "keyword.control.python";
+        dotted_prefix_identifier "@" scope "entity.name.function.decorator.python";
+        identifier_before ")" scope "variable.parameter.python";
+        function_call scope "entity.name.function.python";
+        capitalized_identifier scope "entity.name.type.python";
+        operators "//= **= == != <= >= += -= *= /= %= &= |= ^= <<= >>= -> := //" scope "keyword.operator.python";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.python";
+    }
+}

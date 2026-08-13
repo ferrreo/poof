@@ -1,0 +1,1 @@
+const users=[{id:"u1",name:"zhl",active:true,count:42},{id:"u2",name:"syntax",active:false,count:7}];function render(u){return `${u.id}:${u.name}:${u.count}\n`}for(const user of users){if(user.active)console.log(render(user));}

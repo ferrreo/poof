@@ -1,0 +1,19 @@
+<plist>
+<dict>
+<key>scopeName</key>
+<string>source.while-fixture</string>
+<key>name</key>
+<string>While Fixture</string>
+<key>patterns</key>
+<array>
+<dict>
+<key>name</key>
+<string>comment.line.quote.fixture</string>
+<key>begin</key>
+<string>^&gt;</string>
+<key>while</key>
+<string>^&gt;</string>
+</dict>
+</array>
+</dict>
+</plist>

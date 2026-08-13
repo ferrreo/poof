@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>zhl theme demo — GitHub Dark / Light</title>
+  <link rel="stylesheet" href="/packages/zhl-themes/github-dark.css" />
+  <link rel="stylesheet" href="/packages/zhl-themes/github-light.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: system-ui, sans-serif;
+      background: #161b22;
+      color: #e6edf3;
+      transition: background 0.2s;
+    }
+    body.light {
+      background: #f6f8fa;
+      color: #1f2328;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 18px; margin: 0; }
+    #toggle {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #e6edf3;
+      cursor: pointer;
+    }
+    body.light #toggle {
+      background: #ffffff;
+      color: #1f2328;
+      border-color: #d0d7de;
+    }
+    #status { font-size: 13px; opacity: 0.7; }
+    .panes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .pane h2 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+    pre.zhl-sample {
+      margin: 0;
+      padding: 16px;
+      border-radius: 8px;
+      overflow: auto;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 200px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>zhl themes — GitHub Dark / Light</h1>
+    <button id="toggle">Switch to light</button>
+    <span id="status">loading…</span>
+  </header>
+  <div class="panes">
+    <section class="pane">
+      <h2>Zig</h2>
+      <pre id="zig" class="zhl-sample zhl-github-dark"><code></code></pre>
+    </section>
+    <section class="pane">
+      <h2>TypeScript</h2>
+      <pre id="ts" class="zhl-sample zhl-github-dark"><code></code></pre>
+    </section>
+  </div>
+  <script type="module" src="/benchmark/browser/theme_demo.js"></script>
+</body>
+</html>

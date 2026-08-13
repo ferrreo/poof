@@ -1,0 +1,12 @@
+grammar "source.json" {
+    name "JSON";
+    scope root = "source.json";
+
+    context main {
+        quoted_key_before ":" scope "meta.mapping.key.json";
+        string "\"" escape "\\" scope "string.quoted.double.json";
+        number generic scope "constant.numeric.json";
+        keywords "true false null" scope "constant.language.json";
+        operators "{ } [ ] : ," scope "punctuation.separator.json";
+    }
+}

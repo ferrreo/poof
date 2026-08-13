@@ -1,0 +1,22 @@
+grammar "source.kotlin" {
+    name "Kotlin";
+    scope root = "source.kotlin";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.kotlin";
+        block_comment "/*" "*/" nested scope "comment.block.kotlin";
+        string "\"" escape "\\" scope "string.quoted.double.kotlin";
+        delimited "\"\"\"" "\"\"\"" escape "\\" scope "string.quoted.triple.kotlin";
+        char "'" escape "\\" scope "constant.character.kotlin";
+        number generic scope "constant.numeric.kotlin";
+        dotted_prefix_identifier "@" scope "entity.name.function.decorator.kotlin";
+        regex "\\$[A-Za-z_][A-Za-z0-9_]*" scope "variable.other.kotlin";
+        identifier_before ":" scope "variable.parameter.kotlin";
+        keywords "as break by catch class companion constructor continue data do dynamic else enum expect external false field file finally for fun get if import in init inline inner interface internal is lateinit noinline null object open operator out override package private protected public reified return sealed set super suspend tailrec this throw true try typealias val var vararg when where while" scope "keyword.control.kotlin";
+        keywords "Any Boolean Byte Char Double Float Int Long Nothing Short String Unit UInt ULong UShort" scope "storage.type.kotlin";
+        function_call scope "entity.name.function.kotlin";
+        capitalized_identifier scope "entity.name.type.kotlin";
+        operators "?. ?: !! -> => .. :: ++ -- <= >= == != === !== && || += -= *= /= %= !" scope "keyword.operator.kotlin";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.kotlin";
+    }
+}

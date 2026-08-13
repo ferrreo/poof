@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- sample comment with entity &amp; -->
+<root xmlns="http://example.com" id='x &quot; y' count="42">
+  text &lt; content &gt; &copy; 123
+  <child>sub</child>
+  <empty/>
+  <ns:tag attr="val"/>
+  <![CDATA[ raw <tag> & stuff ]]>
+  <?pi target="data"?>
+</root>

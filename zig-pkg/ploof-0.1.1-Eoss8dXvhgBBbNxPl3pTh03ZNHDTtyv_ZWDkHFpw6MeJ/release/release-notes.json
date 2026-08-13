@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "version": "0.1.1",
+  "changes": [
+    "Add a compliant ReleaseFast TechEmpower JSON and plaintext benchmark application.",
+    "Compile eligible static response heads and retain bounded direct sends across ready pipelined requests.",
+    "Reuse keep-alive timeout operations and split request-body capabilities from response-only applications.",
+    "Reset request-head decoders in place while securely wiping only consumed bytes."
+  ],
+  "migration": "No migration is required; documented 0.1.0 source API and observable behavior are preserved.",
+  "security": "No known security correction applies to this release.",
+  "performance": "Response-path work is reduced while fixed startup allocation, parser validation, secure clearing, response ordering, and backpressure contracts remain unchanged."
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ferrreo/ploof/release/artifact-manifest.schema.json",
+  "title": "Ploof source release artifact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "name",
+    "version",
+    "revision",
+    "source_date_epoch",
+    "zig_version",
+    "zig_package_hash",
+    "support_matrix_sha256",
+    "gate_manifest_sha256",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "name": {"const": "ploof"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "source_date_epoch": {"type": "integer", "minimum": 1},
+    "zig_version": {"const": "0.16.0"},
+    "zig_package_hash": {"type": "string", "minLength": 20},
+    "support_matrix_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gate_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

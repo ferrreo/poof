@@ -1,0 +1,37 @@
+%YAML 1.2
+---
+name: TypeScript
+file_extensions:
+  - ts
+  - tsx
+scope: source.ts
+contexts:
+  main:
+    - match: '//.*$'
+      scope: comment.line.double-slash.ts
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.ts
+      push: block-comment
+    - match: '"(?:\\.|[^"\\])*"'
+      scope: string.quoted.double.ts
+    - match: "'(?:\\\\.|[^'\\\\])*'"
+      scope: string.quoted.single.ts
+    - match: '\b(?:as|async|await|break|case|catch|class|const|continue|declare|default|else|export|extends|finally|for|from|function|if|import|in|interface|let|new|of|return|throw|try|type|var|while)\b'
+      scope: keyword.control.ts
+    - match: '\b(?:boolean|number|string|unknown|void|never|any)\b'
+      scope: support.type.ts
+    - match: '\b(?:true|false|null|undefined)\b'
+      scope: constant.language.ts
+    - match: '\b\d+(?:_\d+)*(?:\.\d+(?:_\d+)*)?\b'
+      scope: constant.numeric.ts
+    - match: '\b[A-Za-z_$][A-Za-z0-9_$]*(?=\s*\()'
+      scope: entity.name.function.ts
+    - match: '[{}()\[\];,.]'
+      scope: punctuation.separator.ts
+    - match: '=>|===|!==|==|!=|<=|>=|\+\+|--|&&|\|\||[+\-*/%=<>!?:]'
+      scope: keyword.operator.ts
+  block-comment:
+    - meta_scope: comment.block.ts
+    - match: '\*/'
+      scope: punctuation.definition.comment.end.ts
+      pop: true

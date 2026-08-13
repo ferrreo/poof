@@ -1,0 +1,21 @@
+grammar "source.rust" {
+    name "Rust";
+    scope root = "source.rust";
+
+    context main {
+        line_comment "///" scope "comment.line.documentation.rust";
+        line_comment "//" scope "comment.line.double-slash.rust";
+        block_comment "/*" "*/" nested scope "comment.block.rust";
+        string "\"" escape "\\" scope "string.quoted.double.rust";
+        char "'" escape "\\" scope "constant.character.rust";
+        number generic scope "constant.numeric.rust";
+        keywords "as async await break const continue crate dyn else enum extern false fn for if impl in" scope "keyword.control.rust";
+        keywords "let loop match mod move mut pub ref return self Self static struct super trait true type unsafe" scope "keyword.control.rust";
+        keywords "use where while i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 bool char str" scope "entity.name.type.numeric.rust";
+        identifier_before "!" scope "entity.name.function.macro.rust";
+        capitalized_identifier scope "entity.name.type.rust";
+        function_call scope "entity.name.function.rust";
+        operators ":: -> => .. ..= && || <= >= == != += -= *= /= %= &= |= ^= <<= >>= !" scope "keyword.operator.rust";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.rust";
+    }
+}

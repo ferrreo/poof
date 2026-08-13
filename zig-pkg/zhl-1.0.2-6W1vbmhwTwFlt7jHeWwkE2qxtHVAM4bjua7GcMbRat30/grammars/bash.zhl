@@ -1,0 +1,17 @@
+grammar "source.shell" {
+    name "Bash";
+    scope root = "source.shell";
+
+    context main {
+        line_comment "#" scope "comment.line.number-sign.shell";
+        identifier_before "=" scope "variable.other.assignment.shell";
+        prefix_identifier "$" scope "variable.other.normal.shell";
+        string "\"" escape "\\" scope "string.quoted.double.shell";
+        string "'" escape "\\" scope "string.quoted.single.shell";
+        number generic scope "constant.numeric.shell";
+        keywords "if then else elif fi for in do done while until case esac function select return continue break" scope "keyword.control.shell";
+        keywords "export declare typeset local readonly printf echo cd test true false" scope "support.function.builtin.shell";
+        operators "&& || ;; << >> <= >= == != += -= *= /= %= = !" scope "keyword.operator.shell";
+        operators "+ - * / % < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.shell";
+    }
+}

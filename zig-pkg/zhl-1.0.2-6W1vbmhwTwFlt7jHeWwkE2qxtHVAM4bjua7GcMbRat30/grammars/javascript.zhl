@@ -1,0 +1,19 @@
+grammar "source.js" {
+    name "JavaScript";
+    scope root = "source.js";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.js";
+        block_comment "/*" "*/" scope "comment.block.js";
+        string "\"" escape "\\" scope "string.quoted.double.js";
+        string "'" escape "\\" scope "string.quoted.single.js";
+        number generic scope "constant.numeric.js";
+        keywords "async await break case catch class const continue debugger default delete do else export extends" scope "keyword.control.js";
+        keywords "finally for from function get if import in instanceof let new of return set static super switch" scope "keyword.control.js";
+        keywords "this throw try typeof var void while with yield true false null undefined" scope "constant.language.js";
+        function_call scope "entity.name.function.js";
+        capitalized_identifier scope "entity.name.type.js";
+        operators "=== !== == != <= >= && || ?? ++ -- += -= *= /= %= ** => ... !" scope "keyword.operator.js";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.js";
+    }
+}

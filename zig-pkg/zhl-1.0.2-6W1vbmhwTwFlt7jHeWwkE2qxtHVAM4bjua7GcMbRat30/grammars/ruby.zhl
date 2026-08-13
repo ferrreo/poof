@@ -1,0 +1,18 @@
+grammar "source.ruby" {
+    name "Ruby";
+    scope root = "source.ruby";
+
+    context main {
+        line_comment "#" scope "comment.line.number-sign.ruby";
+        number generic scope "constant.numeric.ruby";
+        keywords "BEGIN END alias and begin break case class def defined do else elsif end ensure false for if in module next nil not or redo rescue retry return self super then true undef unless until when while yield" scope "keyword.control.ruby";
+        string "\"" escape "\\" scope "string.quoted.double.ruby";
+        string "'" escape "\\" scope "string.quoted.single.ruby";
+        regex ":[A-Za-z_][A-Za-z0-9_]*[!?=]?" scope "constant.other.symbol.ruby";
+        function_call scope "entity.name.function.ruby";
+        capitalized_identifier scope "entity.name.type.ruby";
+        regex "[@$]?[A-Za-z_][A-Za-z0-9_]*[!?=]?" scope "variable.other.ruby";
+        operators "**= <<= >>= &&= ||= += -= *= /= %= &= |= ^= == === != =~ !~ <= >= <=> && || .. ... => :: [] []= !" scope "keyword.operator.ruby";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.ruby";
+    }
+}

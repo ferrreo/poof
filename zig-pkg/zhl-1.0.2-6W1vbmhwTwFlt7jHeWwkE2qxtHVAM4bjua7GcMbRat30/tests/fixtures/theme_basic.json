@@ -1,0 +1,28 @@
+{
+  "name": "zhl fixture",
+  "tokenColors": [
+    {
+      "scope": "keyword.control",
+      "settings": {
+        "foreground": "#ff00aa",
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "scope": [
+        "string.quoted.double.zig",
+        "comment.line"
+      ],
+      "settings": {
+        "foreground": "#00ff00",
+        "fontStyle": "underline"
+      }
+    },
+    {
+      "scope": "source.zig keyword.operator.zig",
+      "settings": {
+        "foreground": "#112233"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+grammar "source.java" {
+    name "Java";
+    scope root = "source.java";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.java";
+        block_comment "/*" "*/" scope "comment.block.java";
+        string "\"" escape "\\" scope "string.quoted.double.java";
+        char "'" escape "\\" scope "constant.character.java";
+        number generic scope "constant.numeric.java";
+        dotted_prefix_identifier "@" scope "entity.name.function.decorator.java";
+        keywords "abstract assert break case catch class const continue default do else enum extends final finally for goto if implements import instanceof interface native new package private protected public return static strictfp super switch synchronized this throw throws transient try volatile while yield record sealed permits" scope "keyword.control.java";
+        keywords "boolean byte char double false float int long null short true var void" scope "storage.type.java";
+        function_call scope "entity.name.function.java";
+        capitalized_identifier scope "entity.name.type.java";
+        operators "-> :: ++ -- <= >= == != && || << >> >>> += -= *= /= %= &= |= ^= <<= >>= >>>= !" scope "keyword.operator.java";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.java";
+    }
+}

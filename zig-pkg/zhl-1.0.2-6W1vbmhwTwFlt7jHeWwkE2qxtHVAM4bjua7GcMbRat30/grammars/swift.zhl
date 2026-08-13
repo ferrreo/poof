@@ -1,0 +1,21 @@
+grammar "source.swift" {
+    name "Swift";
+    scope root = "source.swift";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.swift";
+        block_comment "/*" "*/" nested scope "comment.block.swift";
+        string "\"" escape "\\" scope "string.quoted.double.swift";
+        marker_string "#" escape "\"#" scope "string.quoted.double.swift";
+        char "'" escape "\\" scope "constant.character.swift";
+        number generic scope "constant.numeric.swift";
+        dotted_prefix_identifier "@" scope "entity.name.function.decorator.swift";
+        regex "#[A-Za-z_][A-Za-z0-9_]*" scope "keyword.other.directive.swift";
+        keywords "associatedtype borrowing break case catch class consuming continue default defer deinit do else enum extension fallthrough for func guard if import in init inout internal is isolated let mutating nil nonisolated open operator private protocol public rethrows return self Self static struct subscript super switch throw throws try typealias var where while" scope "keyword.control.swift";
+        keywords "Any Bool Character Double Error Float Int Never Optional String UInt Void false true" scope "storage.type.swift";
+        function_call scope "entity.name.function.swift";
+        capitalized_identifier scope "entity.name.type.swift";
+        operators "-> => ... ..< ...? ?? ?. ++ -- <= >= == != === !== && || += -= *= /= %= &= |= ^= !" scope "keyword.operator.swift";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.swift";
+    }
+}

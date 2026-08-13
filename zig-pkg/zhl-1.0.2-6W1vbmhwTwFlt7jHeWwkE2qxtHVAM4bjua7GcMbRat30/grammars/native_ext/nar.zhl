@@ -1,0 +1,14 @@
+grammar "source.nasal" {
+    name "narrat";
+    scope root = "source.nasal";
+    context main {
+        line_comment "#" scope "comment.line.number-sign.nasal";
+        string "\"" escape "\\" scope "string.quoted.double.nasal";
+        string "'" escape "\\" scope "string.quoted.single.nasal";
+        number generic scope "constant.numeric.nasal";
+        keywords "and break continue else elsif for foreach func if nil or return var while" scope "keyword.control.nasal";
+        function_call scope "entity.name.function.nasal";
+        identifier_before ":" scope "variable.other.field.nasal";
+        operators "== != <= >= && || += -= *= /= => ~ + - * / % = < > & | ^ ! ? : ; , . { } ( ) [ ]" scope "keyword.operator.nasal";
+    }
+}

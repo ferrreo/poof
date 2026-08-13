@@ -1,0 +1,19 @@
+grammar "source.tsx" {
+    name "TSX";
+    scope root = "source.tsx";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.tsx";
+        block_comment "/*" "*/" scope "comment.block.tsx";
+        string "\"" escape "\\" scope "string.quoted.double.tsx";
+        string "'" escape "\\" scope "string.quoted.single.tsx";
+        number generic scope "constant.numeric.tsx";
+        regex "</?[A-Za-z][A-Za-z0-9.:-]*" scope "entity.name.tag.tsx";
+        identifier_before "=" scope "entity.other.attribute-name.tsx";
+        keywords "abstract any as asserts async await boolean break case catch class const constructor continue debugger declare default delete do else enum export extends false finally for from function get if implements import in infer instanceof interface is keyof let module namespace never new null number object of private protected public readonly require return set static string super switch symbol this throw true try type typeof undefined unique unknown var void while with yield" scope "keyword.control.tsx";
+        function_call scope "entity.name.function.tsx";
+        capitalized_identifier scope "entity.name.type.tsx";
+        operators "=== !== == != <= >= && || ?? ++ -- += -= *= /= %= ** => ... !" scope "keyword.operator.tsx";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.tsx";
+    }
+}

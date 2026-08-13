@@ -1,3 +1,20 @@
 .zig-cache/
 zig-out/
 *.o
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime and integration-test state
+.poof/
+data/
+tmp/
+*.log
+coverage/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store

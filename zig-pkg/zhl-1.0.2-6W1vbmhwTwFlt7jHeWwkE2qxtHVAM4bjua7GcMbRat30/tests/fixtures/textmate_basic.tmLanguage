@@ -1,0 +1,8 @@
+<plist><dict>
+<key>scopeName</key><string>source.fixture</string>
+<key>name</key><string>Fixture</string>
+<key>patterns</key><array>
+<dict><key>match</key><string>\b(if|return)\b</string></dict>
+</array>
+</dict></plist>
+

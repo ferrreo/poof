@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>name</key><string>zhl fixture</string>
+  <key>settings</key>
+  <array>
+    <dict>
+      <key>scope</key><string>keyword.control</string>
+      <key>settings</key>
+      <dict>
+        <key>foreground</key><string>#ff00aa</string>
+        <key>fontStyle</key><string>bold italic</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>scope</key><string>string.quoted.double.zig, comment.line</string>
+      <key>settings</key>
+      <dict>
+        <key>foreground</key><string>#00ff00</string>
+        <key>fontStyle</key><string>underline</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>scope</key><string>source.zig keyword.operator.zig</string>
+      <key>settings</key>
+      <dict>
+        <key>foreground</key><string>#112233</string>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

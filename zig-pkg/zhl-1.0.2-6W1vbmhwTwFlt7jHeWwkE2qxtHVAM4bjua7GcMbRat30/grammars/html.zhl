@@ -1,0 +1,16 @@
+grammar "text.html.basic" {
+    name "HTML";
+    scope root = "text.html.basic";
+
+    context main {
+        block_comment "<!--" "-->" scope "comment.block.html";
+        regex "<![A-Z]+[^>]*>" scope "punctuation.definition.tag.html";
+        regex "</?[A-Za-z][A-Za-z0-9:-]*" scope "entity.name.tag.html";
+        regex "[A-Za-z_:][A-Za-z0-9_:.:-]*" scope "entity.other.attribute-name.html";
+        identifier_before "=" scope "entity.other.attribute-name.html";
+        string "\"" escape "\\" scope "string.quoted.double.html";
+        string "'" escape "\\" scope "string.quoted.single.html";
+        regex "&[A-Za-z0-9#]+;" scope "constant.character.entity.html";
+        operators "< > / = { } ( ) [ ]" scope "punctuation.html";
+    }
+}

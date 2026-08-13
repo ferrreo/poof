@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: poof
+      POSTGRES_USER: poof
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-poof}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - poof-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poof -d poof"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  poof-postgres:

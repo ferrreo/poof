@@ -1,0 +1,13 @@
+const std = @import("std");
+
+pub const Adversarial = struct {
+    pub fn run() void {
+        const dense = .{ .a = .{ 1, 2, 3 }, .b = .{ .x = true, .y = false }, .c = .{ .nested = .{ .again = .{42} } } };
+        const escaped = "quote=\" slash=\\ newline=\n tab=\t brace={d} percent=%d unicode=\u{1f984}";
+        const jsonish = "{\"name\":\"zhl\",\"items\":[{\"k\":\"v\"}],\"fmt\":\"{s}:{d}\\n\"}";
+        const long_line = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ++ "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        std.debug.print("{s} {s} {s} {any}\n", .{ escaped, jsonish, long_line, dense });
+        // fake tokens: "unterminated string" /* not a block */ pub fn Thing() void {} value={d}\n
+        if (dense.b.x and !dense.b.y) for (dense.a) |value| std.debug.print("{d}:{s};", .{ value, escaped });
+    }
+};

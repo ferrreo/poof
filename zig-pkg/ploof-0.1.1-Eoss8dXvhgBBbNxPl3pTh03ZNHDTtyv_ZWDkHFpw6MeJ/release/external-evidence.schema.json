@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ferrreo/ploof/release/external-evidence.schema.json",
+  "title": "Ploof external gate evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gate_id",
+    "candidate_revision",
+    "baseline_revision",
+    "optimization_modes",
+    "cases_by_mode",
+    "fuzz_budget",
+    "soak",
+    "hosts",
+    "resource_plateau",
+    "topologies",
+    "workloads",
+    "sigbench",
+    "load_driver",
+    "proxy_images",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "gate_id": {"type": "string", "minLength": 1},
+    "candidate_revision": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "baseline_revision": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      ]
+    },
+    "optimization_modes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["Debug", "ReleaseSafe", "ReleaseFast"]}
+    },
+    "cases_by_mode": {
+      "type": "object",
+      "propertyNames": {"enum": ["Debug", "ReleaseSafe", "ReleaseFast"]},
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {"type": "string", "minLength": 1}
+      }
+    },
+    "fuzz_budget": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "target_families",
+            "processes_per_target",
+            "generated_cases_per_process",
+            "timeout_seconds_per_process"
+          ],
+          "properties": {
+            "target_families": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "processes_per_target": {"type": "integer", "minimum": 1},
+            "generated_cases_per_process": {"type": "integer", "minimum": 1},
+            "timeout_seconds_per_process": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
+    "soak": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["started_at", "finished_at", "duration_seconds"],
+          "properties": {
+            "started_at": {"type": "string", "format": "date-time"},
+            "finished_at": {"type": "string", "format": "date-time"},
+            "duration_seconds": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
+    "hosts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "kind",
+          "machine_id_sha256",
+          "inventory_id_sha256",
+          "architecture",
+          "operating_system",
+          "kernel",
+          "cpu_vendor",
+          "cpu_model",
+          "cpu_flags"
+        ],
+        "properties": {
+          "role": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["physical", "virtual"]},
+          "machine_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "inventory_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "architecture": {"const": "x86_64"},
+          "operating_system": {"const": "linux"},
+          "kernel": {"type": "string", "minLength": 1},
+          "cpu_vendor": {"type": "string", "minLength": 1},
+          "cpu_model": {"type": "string", "minLength": 1},
+          "cpu_flags": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "resource_plateau": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "measurement_seconds",
+            "samples",
+            "post_start_framework_allocations",
+            "descriptor_delta",
+            "rss_stable",
+            "workspace_stable",
+            "operation_stable"
+          ],
+          "properties": {
+            "measurement_seconds": {"type": "integer", "minimum": 1},
+            "samples": {"type": "integer", "minimum": 2},
+            "post_start_framework_allocations": {"const": 0},
+            "descriptor_delta": {"const": 0},
+            "rss_stable": {"const": true},
+            "workspace_stable": {"const": true},
+            "operation_stable": {"const": true}
+          }
+        }
+      ]
+    },
+    "topologies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "workloads": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "sigbench": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "source_sha256", "zig_hash"],
+          "properties": {
+            "name": {"const": "sigbench"},
+            "version": {"const": "0.0.5"},
+            "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "zig_hash": {"type": "string", "minLength": 20}
+          }
+        }
+      ]
+    },
+    "load_driver": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "schema_version",
+            "source_sha256",
+            "binary_path",
+            "binary_sha256"
+          ],
+          "properties": {
+            "name": {"const": "ploof-load-driver"},
+            "schema_version": {"const": 1},
+            "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "binary_path": {"const": "bin/ploof-load-driver"},
+            "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "proxy_images": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "repository", "tag", "digest"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "version": {"type": "string", "minLength": 1},
+          "repository": {"type": "string", "minLength": 1},
+          "tag": {"type": "string", "minLength": 1},
+          "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

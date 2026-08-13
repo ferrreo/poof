@@ -1,0 +1,19 @@
+grammar "source.jsx" {
+    name "JSX";
+    scope root = "source.jsx";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.jsx";
+        block_comment "/*" "*/" scope "comment.block.jsx";
+        string "\"" escape "\\" scope "string.quoted.double.jsx";
+        string "'" escape "\\" scope "string.quoted.single.jsx";
+        number generic scope "constant.numeric.jsx";
+        regex "</?[A-Za-z][A-Za-z0-9.:-]*" scope "entity.name.tag.jsx";
+        identifier_before "=" scope "entity.other.attribute-name.jsx";
+        keywords "async await break case catch class const continue debugger default delete do else export extends finally for from function get if import in instanceof let new of return set static super switch this throw try typeof var void while with yield true false null undefined" scope "keyword.control.jsx";
+        function_call scope "entity.name.function.jsx";
+        capitalized_identifier scope "entity.name.type.jsx";
+        operators "=== !== == != <= >= && || ?? ++ -- += -= *= /= %= ** => ... !" scope "keyword.operator.jsx";
+        operators "+ - * / % = < > & | ^ ~ ? : ; , . { } ( ) [ ]" scope "keyword.operator.jsx";
+    }
+}

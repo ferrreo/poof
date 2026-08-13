@@ -1,0 +1,22 @@
+{
+  "scopeName": "text.html.fixture",
+  "name": "Embedded Fixture",
+  "patterns": [
+    {
+      "name": "meta.embedded.block.fixture",
+      "contentName": "source.embedded.fixture",
+      "begin": "<script>",
+      "end": "</script>",
+      "patterns": [
+        {
+          "name": "support.function.builtin.fixture",
+          "match": "\\bprint\\b"
+        },
+        {
+          "name": "constant.numeric.fixture",
+          "match": "[0-9]+"
+        }
+      ]
+    }
+  ]
+}

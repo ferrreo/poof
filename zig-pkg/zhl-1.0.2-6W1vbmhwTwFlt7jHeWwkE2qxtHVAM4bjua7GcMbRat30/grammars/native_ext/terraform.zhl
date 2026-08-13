@@ -1,0 +1,15 @@
+grammar "source.terraform" {
+    name "terraform";
+    scope root = "source.terraform";
+    context main {
+        line_comment "#" scope "comment.line.number-sign.terraform";
+        line_comment "//" scope "comment.line.double-slash.terraform";
+        block_comment "/*" "*/" scope "comment.block.terraform";
+        string "\"" escape "\\" scope "string.quoted.double.terraform";
+        number generic scope "constant.numeric.terraform";
+        keywords "terraform provider resource data module variable output locals import moved check dynamic for in if true false null" scope "keyword.control.terraform";
+        identifier_before "=" scope "variable.other.field.terraform";
+        function_call scope "entity.name.function.terraform";
+        operators "== != <= >= && || => ... + - * / % = < > ! ? : , . { } ( ) [ ]" scope "keyword.operator.terraform";
+    }
+}

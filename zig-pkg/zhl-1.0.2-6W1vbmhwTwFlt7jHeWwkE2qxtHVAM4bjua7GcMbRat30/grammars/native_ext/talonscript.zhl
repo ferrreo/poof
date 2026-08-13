@@ -1,0 +1,14 @@
+grammar "source.talon" {
+    name "talonscript";
+    scope root = "source.talon";
+    context main {
+        line_comment "#" scope "comment.line.number-sign.talon";
+        string "\"" escape "\\" scope "string.quoted.double.talon";
+        string "'" escape "\\" scope "string.quoted.single.talon";
+        number generic scope "constant.numeric.talon";
+        keywords "tag settings mode app os title host language and or not if else" scope "keyword.control.talon";
+        identifier_before ":" scope "entity.name.function.talon";
+        function_call scope "entity.name.function.talon";
+        operators "< > [ ] ( ) : , . -" scope "punctuation.separator.talon";
+    }
+}

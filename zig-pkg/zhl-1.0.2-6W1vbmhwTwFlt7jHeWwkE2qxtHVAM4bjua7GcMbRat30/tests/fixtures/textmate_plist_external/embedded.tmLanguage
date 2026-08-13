@@ -1,0 +1,7 @@
+<plist><dict>
+<key>scopeName</key><string>source.embedded-plist</string>
+<key>patterns</key><array>
+<dict><key>name</key><string>keyword.control.embedded</string><key>match</key><string>\bif\b</string></dict>
+<dict><key>name</key><string>constant.numeric.embedded</string><key>match</key><string>[0-9]+</string></dict>
+</array>
+</dict></plist>

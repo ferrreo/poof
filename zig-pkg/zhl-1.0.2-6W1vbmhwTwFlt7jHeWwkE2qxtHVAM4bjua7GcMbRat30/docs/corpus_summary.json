@@ -1,0 +1,24 @@
+{
+  "schema": "zhl.corpus-summary.v1",
+  "frozen_from": "tools/check_corpus_counts.sh",
+  "counts": {
+    "native .zhl grammars": 25,
+    "native .zhlb packs": 25,
+    "TextMate JSON grammars": 271,
+    "TextMate generated packs": 271,
+    "Sublime source chunks": 212,
+    "Sublime source syntaxes": 113,
+    "Sublime generated packs": 113,
+    "Sublime extends edges": 42,
+    "Sublime extends targets": 25,
+    "Sublime syntax include edges": 38,
+    "Sublime syntax include targets": 19,
+    "external Sublime fixture chunks": 52,
+    "external Sublime fixture syntaxes": 19,
+    "external Sublime extends edges": 3,
+    "external Sublime extends targets": 3,
+    "external TextMate fixture chunks": 109,
+    "external TextMate fixture syntaxes": 40,
+    "external TextMate plist fixtures": 8
+  }
+}

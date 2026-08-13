@@ -1,0 +1,24 @@
+{
+  "scopeName": "source.fixture",
+  "name": "Fixture",
+  "patterns": [
+    {
+      "name": "support.function.builtin.fixture",
+      "match": "@[A-Za-z_][A-Za-z0-9_]*"
+    },
+    {
+      "name": "string.quoted.fixture",
+      "begin": "\\\"",
+      "end": "\\\""
+    },
+    {
+      "include": "#comments"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.fixture",
+      "match": "//.*$"
+    }
+  }
+}

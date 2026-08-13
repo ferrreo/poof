@@ -1,0 +1,16 @@
+grammar "source.toml" {
+    name "TOML";
+    scope root = "source.toml";
+
+    context main {
+        line_comment "#" scope "comment.line.number-sign.toml";
+        identifier_before "]" scope "entity.name.section.toml";
+        quoted_key_before "=" scope "meta.mapping.key.toml";
+        identifier_before "=" scope "meta.mapping.key.toml";
+        string "\"" escape "\\" scope "string.quoted.double.toml";
+        string "'" escape "\\" scope "string.quoted.single.toml";
+        number generic scope "constant.numeric.toml";
+        keywords "true false inf nan" scope "constant.language.toml";
+        operators "[ ] = . ," scope "punctuation.separator.toml";
+    }
+}

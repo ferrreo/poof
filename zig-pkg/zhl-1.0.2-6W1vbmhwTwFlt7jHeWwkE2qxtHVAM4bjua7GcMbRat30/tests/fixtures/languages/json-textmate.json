@@ -1,0 +1,6 @@
+{
+  "name": "zhl",
+  "enabled": true,
+  "count": 42,
+  "items": ["zig", null]
+}

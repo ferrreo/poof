@@ -1,0 +1,14 @@
+<plist><dict>
+<key>scopeName</key><string>source.fixture</string>
+<key>patterns</key><array>
+<dict><key>name</key><string>keyword.control.fixture</string><key>match</key><string>\bif\b</string></dict>
+</array>
+<key>injections</key><dict>
+<key>L:source.other</key><dict><key>patterns</key><array>
+<dict><key>name</key><string>constant.numeric.fixture</string><key>match</key><string>[0-9]+</string></dict>
+</array></dict>
+<key>R:source.fixture</key><dict><key>patterns</key><array>
+<dict><key>name</key><string>string.quoted.fixture</string><key>match</key><string>ok</string></dict>
+</array></dict>
+</dict>
+</dict></plist>

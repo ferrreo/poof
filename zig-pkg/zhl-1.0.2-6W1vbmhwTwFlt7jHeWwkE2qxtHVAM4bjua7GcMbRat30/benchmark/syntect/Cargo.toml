@@ -1,0 +1,14 @@
+[package]
+name = "zhl-syntect-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+onig = { version = "6.5.3", default-features = false }
+syntect = { version = "5", default-features = false, features = ["default-onig"] }
+two-face = { version = "0.5.1", default-features = false, features = ["syntect-onig"] }
+
+[[bin]]
+name = "zhl-onig-cases"
+path = "src/onig_cases.rs"

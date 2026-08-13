@@ -1,0 +1,21 @@
+grammar "source.v" {
+    name "v";
+    scope root = "source.v";
+
+    context main {
+        line_comment "//" scope "comment.line.double-slash.v";
+        block_comment "/*" "*/" scope "comment.block.v";
+        string "\"" escape "\\" scope "string.quoted.double.v";
+        char "'" escape "\\" scope "constant.character.v";
+        string "`" escape "\\" scope "string.quoted.raw.v";
+        number generic scope "constant.numeric.v";
+        keywords "as asm assert atomic break const continue defer else enum false fn for go goto if import in interface" scope "keyword.control.v";
+        keywords "is lock match module mut none or pub return rlock select shared sizeof static struct true type typeof union unsafe" scope "keyword.control.v";
+        keywords "volatile __global __offsetof __sizeof __type_index chan map array string bool byte rune int i8 i16 i32 i64" scope "support.type.primitive.v";
+        keywords "u8 u16 u32 u64 isize usize f32 f64 voidptr charptr byteptr" scope "support.type.primitive.v";
+        capitalized_identifier scope "entity.name.type.v";
+        function_call scope "entity.name.function.v";
+        operators ":= -> << >> && || <= >= == != += -= *= /= %= &= |= ^= ++ --" scope "keyword.operator.v";
+        operators "+ - * / % = < > & | ^ ~ ! ? : ; , . { } ( ) [ ]" scope "keyword.operator.v";
+    }
+}

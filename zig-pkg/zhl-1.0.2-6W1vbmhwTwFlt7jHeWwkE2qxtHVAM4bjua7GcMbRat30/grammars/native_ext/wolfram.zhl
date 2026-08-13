@@ -1,0 +1,13 @@
+grammar "source.wolfram" {
+    name "wolfram";
+    scope root = "source.wolfram";
+    context main {
+        block_comment "(*" "*)" nested scope "comment.block.wolfram";
+        string "\"" escape "\\" scope "string.quoted.double.wolfram";
+        number generic scope "constant.numeric.wolfram";
+        keywords "True False Null None Automatic All Infinity Indeterminate ComplexInfinity Pi E I Degree GoldenRatio" scope "constant.language.wolfram";
+        identifier_before "[" scope "entity.name.function.wolfram";
+        capitalized_identifier scope "entity.name.type.wolfram";
+        operators ":= :> -> /. // @ @@ @@@ /@ //@ = == === != =!= <= >= && || ++ -- ** .. ... _ __ ___ + - * / ^ < > & | ! ? : ; , . { } ( ) [ ]" scope "keyword.operator.wolfram";
+    }
+}
