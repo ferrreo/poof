@@ -1,28 +1,28 @@
-/* Hallmark · genre: editorial · macrostructure: Index-First · theme: Newsprint · enrichment: none · nav: N6 · footer: Ft4 · design-system: design.md · designed-as-app
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · theme: studied-DNA (source: https://pika-os.com) · enrichment: none · nav: N1b · footer: Ft2 · design-system: design.md · designed-as-app
  * Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4
  */
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Ubuntu+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap");
 
 :root {
   color-scheme: light;
-  --color-paper: oklch(92% 0.045 50);
-  --color-paper-2: oklch(89% 0.050 50);
-  --color-paper-3: oklch(84% 0.054 45);
-  --color-rule: oklch(68% 0.030 40);
-  --color-rule-2: oklch(35% 0.020 35);
-  --color-muted: oklch(46% 0.022 35);
-  --color-neutral: oklch(30% 0.025 30);
-  --color-ink-2: oklch(20% 0.030 28);
-  --color-ink: oklch(15% 0.030 25);
-  --color-accent: oklch(32% 0.10 28);
-  --color-accent-ink: oklch(45% 0.13 30);
-  --color-focus: oklch(48% 0.18 30);
-  --color-code-paper: oklch(18% 0.02 250);
-  --color-code-ink: oklch(90% 0.02 250);
+  --color-paper: oklch(97.5% 0.015 96);
+  --color-paper-2: oklch(95.5% 0.018 96);
+  --color-paper-3: oklch(93% 0.022 96);
+  --color-rule: oklch(82% 0.014 96);
+  --color-rule-2: oklch(68% 0.016 96);
+  --color-muted: oklch(52% 0.014 96);
+  --color-neutral: oklch(38% 0.013 96);
+  --color-ink-2: oklch(32% 0.012 96);
+  --color-ink: oklch(26% 0.012 96);
+  --color-accent: oklch(90.2% 0.173 96.7);
+  --color-accent-ink: oklch(42% 0.12 96);
+  --color-focus: oklch(72% 0.16 96.7);
+  --color-code-paper: oklch(22% 0.012 96);
+  --color-code-ink: oklch(94% 0.02 96);
 
-  --font-display: "Newsreader", "Source Serif 4", ui-serif, Georgia, serif;
-  --font-body: "IBM Plex Sans", ui-sans-serif, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -31,14 +31,14 @@
   --text-lg: 1.375rem;
   --text-xl: 1.75rem;
   --text-2xl: 2.25rem;
-  --text-display-s: clamp(2rem, 3vw + 1rem, 2.875rem);
+  --text-display-s: clamp(1.75rem, 2.5vw + 1rem, 2.5rem);
   --text-display: clamp(2rem, 3vw + 1rem, 2.875rem);
 
-  --tracking-display: -0.022em;
-  --tracking-tight: -0.008em;
-  --tracking-label: 0.08em;
+  --tracking-display: -0.02em;
+  --tracking-tight: -0.006em;
+  --tracking-label: 0.06em;
 
-  --lh-display: 1.12;
+  --lh-display: 1.15;
   --lh-normal: 1.55;
   --lh-relaxed: 1.65;
 
@@ -56,9 +56,11 @@
   --page: min(72rem, calc(100% - var(--space-xl)));
   --page-narrow: min(42rem, calc(100% - var(--space-xl)));
 
-  --radius-card: 0;
-  --radius-pill: 0;
-  --radius-input: 0;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-card: var(--radius-sm);
+  --radius-input: var(--radius-sm);
   --rule-card: 1px;
   --rule-heavy: 2px;
 
@@ -113,7 +115,7 @@ a {
 }
 
 a:hover {
-  color: var(--color-accent);
+  color: var(--color-accent-ink);
 }
 
 h1,
@@ -147,49 +149,64 @@ h3 {
   letter-spacing: var(--tracking-tight);
 }
 
+/* ── Sticky nav slab (N1b) ─────────────────────────────────────────────── */
+
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky-nav);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-md);
   width: 100%;
-  padding: var(--space-md) 0 var(--space-sm);
+  padding: var(--space-sm) max(calc((100% - 72rem) / 2 + var(--space-md)), var(--space-md));
+  background: var(--color-paper-3);
   border-bottom: var(--rule-heavy) solid var(--color-ink);
-  box-shadow: 0 var(--rule-card) 0 var(--color-ink);
 }
 
 .masthead-kicker {
-  width: var(--page);
-  margin: 0 auto var(--space-xs);
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  letter-spacing: var(--tracking-label);
-  text-align: center;
-  text-transform: uppercase;
+  display: none;
 }
 
 .brand {
-  display: block;
-  width: var(--page);
-  margin: 0 auto var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
   color: var(--color-ink);
-  font-size: clamp(2.25rem, 6vw, 4.25rem);
+  font-size: var(--text-lg);
   line-height: 1;
-  letter-spacing: -0.03em;
-  text-align: center;
+  letter-spacing: var(--tracking-tight);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .brand:hover {
   color: var(--color-ink);
 }
 
+.brand-mark {
+  display: none;
+}
+
+.brand-logo,
+.brand img,
+img.logo {
+  display: block;
+  max-height: 2.5rem;
+  width: auto;
+}
+
 .masthead-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  width: var(--page);
-  margin: 0 auto;
-  padding-top: var(--space-xs);
+  justify-content: flex-end;
+  gap: var(--space-sm) var(--space-md);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 nav {
@@ -201,21 +218,25 @@ nav {
 
 nav a {
   color: var(--color-muted);
-  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--tracking-label);
   text-decoration: none;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
 nav a:hover,
 nav a.active {
-  color: var(--color-accent);
+  color: var(--color-ink);
 }
 
 nav a.active {
-  box-shadow: inset 0 calc(var(--rule-heavy) * -1) 0 var(--color-accent);
+  box-shadow: inset 0 calc(var(--rule-heavy) * -1) 0 var(--color-ink);
 }
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
 
 .button {
   display: inline-flex;
@@ -224,13 +245,13 @@ nav a.active {
   gap: var(--space-xs);
   min-height: var(--control-height);
   padding: 0 var(--space-md);
-  border: var(--rule-card) solid var(--color-ink);
-  border-radius: var(--radius-card);
+  border: var(--rule-heavy) solid var(--color-ink);
+  border-radius: var(--radius-sm);
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -238,6 +259,7 @@ nav a.active {
 
 .button:hover,
 .button.is-hover {
+  background: var(--color-paper-2);
   color: var(--color-ink);
 }
 
@@ -256,35 +278,38 @@ nav a.active {
 }
 
 .button[data-state="error"] {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--color-accent-ink);
+  color: var(--color-accent-ink);
 }
 
 .button[data-state="success"] {
   background: var(--color-ink);
-  color: var(--color-paper);
+  color: var(--color-accent);
 }
 
 .button-primary {
   background: var(--color-ink);
-  color: var(--color-paper);
+  color: var(--color-accent);
+  border-color: var(--color-ink);
 }
 
 .button-primary:hover,
 .button-primary.is-hover {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-paper);
+  background: var(--color-ink-2);
+  border-color: var(--color-ink-2);
+  color: var(--color-accent);
 }
 
 .button-quiet {
-  background: transparent;
+  background: var(--color-paper);
 }
 
 .button-quiet:hover,
 .button-quiet.is-hover {
   background: var(--color-paper-2);
 }
+
+/* ── Hero & page shells ──────────────────────────────────────────────── */
 
 .hero {
   width: var(--page);
@@ -312,6 +337,7 @@ nav a.active {
 .eyebrow {
   margin: 0 0 var(--space-xs);
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
   font-style: normal;
@@ -348,6 +374,19 @@ nav a.active {
   padding: var(--space-lg) 0 var(--space-md);
 }
 
+/* ── Forms & inputs ──────────────────────────────────────────────────── */
+
+input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--color-ink);
+  flex: none;
+}
+
 .filters,
 .admin-filters,
 .pagination {
@@ -359,19 +398,22 @@ nav a.active {
 
 .filters input,
 .filters select,
-.stacked-form input,
+.stacked-form input:not([type="checkbox"]),
 .stacked-form select,
 .stacked-form textarea,
 .comment-form textarea,
 .admin-filters input,
 .admin-filters select,
 .admin-issue select,
-.admin-issue input,
-.inline-create input,
-.board-edit input,
-.token-create input,
+.admin-issue input:not([type="checkbox"]),
+.inline-create input:not([type="checkbox"]),
+.board-edit input:not([type="checkbox"]),
+.token-create input:not([type="checkbox"]),
 .token-create select,
-.reply-composer textarea {
+.reply-composer textarea,
+.site-branding-form input:not([type="checkbox"]),
+.site-branding-form select,
+.site-branding-form textarea {
   width: 100%;
   min-height: var(--control-height);
   padding: var(--space-xs) var(--space-sm);
@@ -393,7 +435,7 @@ nav a.active {
 
 .filters input:hover,
 .filters select:hover,
-.stacked-form input:hover,
+.stacked-form input:not([type="checkbox"]):hover,
 .stacked-form select:hover,
 .stacked-form textarea:hover,
 .comment-form textarea:hover,
@@ -414,15 +456,17 @@ nav a.active {
 .stacked-form textarea[aria-invalid="true"],
 .comment-form textarea[aria-invalid="true"],
 .button.is-focus {
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-ink);
 }
+
+/* ── Filter pills ──────────────────────────────────────────────────────── */
 
 .pill {
   min-height: var(--control-height);
   padding: 0 var(--space-sm);
-  border: 0;
-  border-bottom: var(--rule-heavy) solid transparent;
-  background: transparent;
+  border: var(--rule-card) solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
   color: var(--color-muted);
   font: inherit;
   font-size: var(--text-sm);
@@ -431,8 +475,14 @@ nav a.active {
   cursor: pointer;
 }
 
+.pill:hover {
+  border-color: var(--color-ink);
+  color: var(--color-ink);
+}
+
 .pill.active {
-  border-bottom-color: var(--color-accent);
+  border-color: var(--color-ink);
+  background: var(--color-paper-2);
   color: var(--color-ink);
 }
 
@@ -441,6 +491,8 @@ nav a.active {
   flex-wrap: wrap;
   gap: var(--space-xs);
 }
+
+/* ── Issue list ────────────────────────────────────────────────────────── */
 
 .issue-list {
   display: grid;
@@ -472,6 +524,7 @@ nav a.active {
 
 .vote-count span {
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
@@ -492,7 +545,8 @@ nav a.active {
   min-height: 1.25rem;
   padding: 0 var(--space-2xs);
   border: var(--rule-card) solid var(--color-rule-2);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -504,8 +558,8 @@ nav a.active {
 }
 
 .status-in_progress {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--color-accent-ink);
+  color: var(--color-accent-ink);
 }
 
 .status-closed {
@@ -513,8 +567,8 @@ nav a.active {
 }
 
 .kind-bug {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--color-accent-ink);
+  color: var(--color-accent-ink);
 }
 
 .issue-card h3 {
@@ -548,11 +602,13 @@ nav a.active {
 }
 
 .text-link {
-  color: var(--color-accent);
+  color: var(--color-accent-ink);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
   text-underline-offset: 0.2em;
 }
+
+/* ── Page headings ───────────────────────────────────────────────────── */
 
 .page-heading {
   padding: var(--space-2xl) 0 var(--space-lg);
@@ -566,9 +622,9 @@ nav a.active {
 .developer-page h1,
 .profile-page h1,
 .changelog-detail h1 {
-  max-width: 18ch;
+  max-width: 24ch;
   margin: 0 0 var(--space-md);
-  font-size: var(--text-display);
+  font-size: var(--text-display-s);
   font-style: normal;
   line-height: var(--lh-display);
 }
@@ -584,6 +640,8 @@ nav a.active {
   font-size: var(--text-md);
   line-height: var(--lh-relaxed);
 }
+
+/* ── Roadmap ───────────────────────────────────────────────────────────── */
 
 .roadmap-grid {
   width: var(--page);
@@ -622,7 +680,7 @@ nav a.active {
 
 .roadmap-column h2 {
   font-size: var(--text-sm);
-  font-family: var(--font-body);
+  font-family: var(--font-mono);
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
@@ -659,6 +717,8 @@ nav a.active {
 .roadmap-empty {
   padding: var(--space-lg) 0;
 }
+
+/* ── Issue detail ──────────────────────────────────────────────────────── */
 
 .issue-detail {
   padding: var(--space-2xl) 0 var(--space-3xl);
@@ -711,7 +771,7 @@ nav a.active {
 .diagnostics h3 {
   margin: var(--space-md) 0 var(--space-2xs);
   color: var(--color-muted);
-  font-family: var(--font-body);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: var(--tracking-label);
@@ -734,6 +794,8 @@ nav a.active {
   padding: var(--space-sm) 0;
   color: var(--color-muted);
 }
+
+/* ── Comments ──────────────────────────────────────────────────────────── */
 
 .comment-list {
   display: grid;
@@ -767,9 +829,9 @@ nav a.active {
 
 .reply-composer summary {
   width: max-content;
-  color: var(--color-accent);
+  color: var(--color-accent-ink);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -782,6 +844,8 @@ nav a.active {
 .reply-composer .button {
   justify-self: end;
 }
+
+/* ── Changelog ───────────────────────────────────────────────────────── */
 
 .changelog-list {
   display: grid;
@@ -812,6 +876,7 @@ nav a.active {
 
 .changelog-card > span {
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
@@ -846,6 +911,8 @@ nav a.active {
   margin-top: var(--space-xl);
 }
 
+/* ── Admin shell ───────────────────────────────────────────────────────── */
+
 .admin-shell {
   padding: var(--space-2xl) 0 var(--space-3xl);
 }
@@ -878,6 +945,7 @@ nav a.active {
 
 .admin-stat span {
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
@@ -916,7 +984,12 @@ nav a.active {
 
 .admin-issue {
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) repeat(4, minmax(6rem, 0.28fr)) auto auto auto auto;
+  grid-template-columns:
+    minmax(12rem, 1.4fr)
+    repeat(3, minmax(7rem, 0.9fr))
+    auto auto
+    minmax(6rem, 0.8fr)
+    auto auto;
   gap: var(--space-xs);
   align-items: end;
   padding: var(--space-md) 0;
@@ -927,6 +1000,7 @@ nav a.active {
   align-self: center;
   display: grid;
   gap: var(--space-3xs);
+  min-width: 0;
 }
 
 .admin-issue-title span {
@@ -940,6 +1014,7 @@ nav a.active {
   display: grid;
   gap: var(--space-3xs);
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -947,13 +1022,26 @@ nav a.active {
 }
 
 .admin-issue .check {
-  align-self: center;
+  align-self: end;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: var(--space-2xs);
+  margin: 0;
   text-transform: none;
   letter-spacing: 0;
+  white-space: nowrap;
 }
+
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-xs);
+  align-self: end;
+}
+
+/* ── Board admin ───────────────────────────────────────────────────────── */
 
 .board-admin-grid {
   display: grid;
@@ -962,13 +1050,14 @@ nav a.active {
 }
 
 .admin-card {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: start;
-  justify-content: space-between;
+  display: grid;
   gap: var(--space-md);
   padding: var(--space-md) 0;
   border-bottom: var(--rule-card) solid var(--color-rule);
+}
+
+.admin-card > div:first-child {
+  min-width: 0;
 }
 
 .admin-card p {
@@ -977,12 +1066,39 @@ nav a.active {
   font-size: var(--text-sm);
 }
 
+.admin-card-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-xs);
+}
+
+.admin-card:not(:has(.admin-card-tools)) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.admin-card:not(:has(.admin-card-tools)) > div:first-child {
+  flex: 1 1 100%;
+}
+
 .board-edit {
-  flex: 1;
+  flex: 1 1 12rem;
   display: grid;
   grid-template-columns: 1fr 1fr 1.5fr 4.5rem auto;
   gap: var(--space-xs);
   align-items: end;
+  min-width: min(100%, 20rem);
+}
+
+.board-archive,
+.admin-card > form:not(.board-edit):not(.inline-create) {
+  display: flex;
+  align-items: end;
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .inline-create {
@@ -996,6 +1112,8 @@ nav a.active {
 .admin-changelog-form {
   margin-top: var(--space-lg);
 }
+
+/* ── Developer & profile ───────────────────────────────────────────────── */
 
 .developer-page,
 .profile-page,
@@ -1022,13 +1140,14 @@ nav a.active {
   color: var(--color-code-ink);
   background: var(--color-code-paper);
   border: var(--rule-card) solid var(--color-ink);
-  font: var(--text-xs)/1.6 var(--font-mono);
+  border-radius: var(--radius-sm);
+  font: var(--text-xs) / 1.6 var(--font-mono);
 }
 
 .token-reveal {
   color: var(--color-ink);
   background: var(--color-paper-2);
-  border-top: var(--rule-heavy) solid var(--color-accent);
+  border-top: var(--rule-heavy) solid var(--color-ink);
 }
 
 .token-list,
@@ -1084,6 +1203,7 @@ nav a.active {
   display: grid;
   gap: var(--space-2xs);
   color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -1095,6 +1215,7 @@ nav a.active {
   gap: var(--space-xs);
   padding: var(--space-md);
   border: var(--rule-card) solid var(--color-rule);
+  border-radius: var(--radius-sm);
 }
 
 .token-create .scope-check {
@@ -1102,15 +1223,27 @@ nav a.active {
   align-items: center;
   gap: var(--space-xs);
   color: var(--color-ink);
+  font-family: var(--font-body);
   font-size: var(--text-sm);
   letter-spacing: 0;
   text-transform: none;
 }
 
-.token-create .scope-check input {
-  min-height: auto;
-  width: auto;
+.site-branding-form {
+  display: grid;
+  gap: var(--space-md);
+  max-width: var(--page-narrow);
 }
+
+.site-branding-form label {
+  display: grid;
+  gap: var(--space-2xs);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* ── Forms ─────────────────────────────────────────────────────────────── */
 
 .comment-form,
 .stacked-form {
@@ -1151,6 +1284,7 @@ nav a.active {
   gap: var(--space-md);
   padding: var(--space-md);
   border: var(--rule-card) solid var(--color-rule);
+  border-radius: var(--radius-sm);
 }
 
 .js .bug-fields {
@@ -1188,6 +1322,8 @@ nav a.active {
   border: 0;
 }
 
+/* ── Markdown ──────────────────────────────────────────────────────────── */
+
 .markdown {
   max-width: var(--measure);
   color: var(--color-ink-2);
@@ -1218,14 +1354,42 @@ nav a.active {
   margin: 1.2em 0;
   padding: 0 0 0 var(--space-md);
   color: var(--color-muted);
-  border-left: var(--rule-heavy) solid var(--color-accent);
+  border-left: var(--rule-heavy) solid var(--color-accent-ink);
 }
 
 .markdown :not(pre) > code {
   padding: 0.1em 0.3em;
-  color: var(--color-accent);
+  color: var(--color-accent-ink);
   background: var(--color-paper-2);
+  border-radius: var(--radius-sm);
   font: 0.9em var(--font-mono);
+}
+
+.markdown-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.25em 0;
+  border: var(--rule-card) solid var(--color-rule);
+  border-radius: var(--radius-md);
+}
+
+.evidence-figure {
+  margin: 1.25em 0;
+  padding: var(--space-sm);
+  border: var(--rule-card) solid var(--color-rule);
+  border-radius: var(--radius-md);
+  background: var(--color-paper-2);
+}
+
+.evidence-figure img,
+.evidence-figure .markdown-image {
+  margin: 0 0 var(--space-xs);
+}
+
+.evidence-figure figcaption {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
 }
 
 .code-block {
@@ -1235,32 +1399,35 @@ nav a.active {
   color: var(--color-code-ink);
   background: var(--color-code-paper);
   border: var(--rule-card) solid var(--color-ink);
-  font: var(--text-sm)/1.65 var(--font-mono);
+  border-radius: var(--radius-sm);
+  font: var(--text-sm) / 1.65 var(--font-mono);
   tab-size: 2;
 }
 
+/* ── Syntax highlighting (zhl) ───────────────────────────────────────── */
+
 .zhl-comment {
-  color: oklch(70% 0.02 250);
+  color: oklch(68% 0.02 96);
 }
 
 .zhl-keyword,
 .zhl-storage {
-  color: oklch(78% 0.12 310);
+  color: oklch(78% 0.12 96);
 }
 
 .zhl-string,
 .zhl-regexp {
-  color: oklch(78% 0.12 130);
+  color: oklch(76% 0.1 130);
 }
 
 .zhl-number,
 .zhl-constant {
-  color: oklch(76% 0.12 55);
+  color: oklch(74% 0.12 70);
 }
 
 .zhl-function,
 .zhl-type {
-  color: oklch(78% 0.1 240);
+  color: oklch(76% 0.08 240);
 }
 
 .zhl-variable,
@@ -1270,18 +1437,20 @@ nav a.active {
 
 .zhl-operator,
 .zhl-punctuation {
-  color: oklch(72% 0.03 250);
+  color: oklch(70% 0.03 96);
 }
 
 .zhl-builtin,
 .zhl-tag {
-  color: oklch(74% 0.14 20);
+  color: oklch(72% 0.12 50);
 }
+
+/* ── Footer (Ft2) ──────────────────────────────────────────────────────── */
 
 footer {
   width: var(--page);
   margin: 0 auto;
-  padding: var(--space-xl) 0 var(--space-2xl);
+  padding: var(--space-lg) 0 var(--space-2xl);
   border-top: var(--rule-heavy) solid var(--color-ink);
   color: var(--color-muted);
   font-size: var(--text-xs);
@@ -1298,15 +1467,23 @@ footer a {
   text-underline-offset: 0.2em;
 }
 
+/* ── Focus ─────────────────────────────────────────────────────────────── */
+
 :focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
 }
 
+/* ── Responsive ────────────────────────────────────────────────────────── */
+
 @media (max-width: 768px) {
   :root {
     --page: min(100% - var(--space-lg), 72rem);
     --page-narrow: min(100% - var(--space-lg), 42rem);
+  }
+
+  .site-header {
+    padding-inline: var(--space-md);
   }
 
   .masthead-bar,
@@ -1318,10 +1495,6 @@ footer a {
   .profile-actions {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .brand {
-    font-size: clamp(2rem, 12vw, 3rem);
   }
 
   nav,
@@ -1376,10 +1549,25 @@ footer a {
     grid-column: 1 / -1;
   }
 
+  .admin-issue .check {
+    justify-self: start;
+  }
+
+  .admin-card:not(:has(.admin-card-tools)) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .board-edit {
+    min-width: 0;
+  }
+
   .comment-reply {
     margin-left: var(--space-sm);
   }
 }
+
+/* ── Motion ────────────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: no-preference) {
   .button,
@@ -1387,7 +1575,10 @@ footer a {
   .text-link,
   .roadmap-card,
   .issue-card h3 a {
-    transition: transform var(--dur-micro) var(--ease-out), opacity var(--dur-micro) var(--ease-out);
+    transition:
+      transform var(--dur-micro) var(--ease-out),
+      background-color var(--dur-micro) var(--ease-out),
+      color var(--dur-micro) var(--ease-out);
   }
 
   .button:hover,
