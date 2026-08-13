@@ -92,6 +92,10 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "poof", .module = application_module },
                 .{
+                    .name = "ploof_testing",
+                    .module = ploof_dependency.module("ploof_testing"),
+                },
+                .{
                     .name = "integration_options",
                     .module = integration_options.createModule(),
                 },

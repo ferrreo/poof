@@ -1,4 +1,9 @@
 const ploof = @import("ploof");
+const app_state_module = @import("app_state.zig");
+const auth_handlers = @import("web/handlers/auth.zig");
+const public_handlers = @import("web/handlers/public.zig");
+const csrf_module = @import("web/csrf.zig");
+const web_middleware = @import("web/middleware.zig");
 
 pub const config = @import("config.zig");
 pub const domain = @import("domain.zig");
@@ -12,13 +17,12 @@ pub const postgres = @import("store/postgres.zig");
 pub const store_migrations = @import("store/migrations.zig");
 pub const highlight = @import("web/highlight.zig");
 pub const markdown = @import("web/markdown.zig");
+pub const page = @import("web/page.zig");
+pub const web_request = @import("web/request.zig");
 pub const Assets = ploof.Asset.Bundle(@import("assets"));
 
-pub const State = struct {
-    readiness: ploof.Lifecycle.Readiness = .{},
-};
-
-pub const Context = ploof.Context(State, ploof.response.standard_head_limits);
+pub const State = app_state_module.State;
+pub const Context = app_state_module.Context;
 
 const HomePage = blk: {
     @setEvalBranchQuota(100_000);
@@ -51,14 +55,65 @@ fn readiness(state: *State) *const ploof.Lifecycle.Readiness {
     return &state.readiness;
 }
 
+const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
+    ploof.get("/", public_handlers.home),
+    ploof.get(
+        "/issues",
+        public_handlers.ListDefinition.handle(public_handlers.list),
+    ),
+    ploof.get("/issues/new", public_handlers.newIssue),
+    ploof.post(
+        "/issues",
+        public_handlers.CreateDefinition.handle(public_handlers.create),
+    ),
+    ploof.get("/issues/:id", public_handlers.detail),
+    ploof.get("/issues/:id/:slug", public_handlers.detail),
+    ploof.post(
+        "/issues/:id/vote",
+        public_handlers.VoteDefinition.handle(public_handlers.vote),
+    ),
+    ploof.post(
+        "/issues/:id/comments",
+        public_handlers.CommentDefinition.handle(public_handlers.comment),
+    ),
+    ploof.get("/roadmap", public_handlers.roadmap),
+    ploof.get("/changelog", public_handlers.changelog),
+    ploof.get(
+        "/auth/discord",
+        auth_handlers.StartDefinition.handle(auth_handlers.start),
+    ),
+    ploof.get(
+        "/auth/discord/callback",
+        auth_handlers.CallbackDefinition.handle(auth_handlers.callback),
+    ),
+    ploof.post(
+        "/auth/logout",
+        auth_handlers.LogoutDefinition.handle(auth_handlers.logout),
+    ),
+});
+
 pub const App = ploof.Application(.{
     .State = State,
     .assets = Assets,
+    .middleware = .{web_middleware.SecurityHeaders{}},
+    .response_body_bytes_max = 512 * 1024,
     .routes = .{
-        ploof.get("/", home),
+        BrowserRoutes,
         ploof.get("/live", Live.handle),
         ploof.get("/ready", Ready.handle),
         ploof.openMetrics("/metrics"),
+    },
+});
+
+pub const WebTestApp = ploof.Application(.{
+    .State = State,
+    .assets = Assets,
+    .middleware = .{web_middleware.SecurityHeaders{}},
+    .response_body_bytes_max = 512 * 1024,
+    .routes = .{
+        BrowserRoutes,
+        ploof.get("/live", Live.handle),
+        ploof.get("/ready", Ready.handle),
     },
 });
 
@@ -85,4 +140,10 @@ test {
     _ = store_migrations;
     _ = highlight;
     _ = markdown;
+    _ = page;
+    _ = web_request;
+    _ = auth_handlers;
+    _ = public_handlers;
+    _ = csrf_module;
+    _ = web_middleware;
 }

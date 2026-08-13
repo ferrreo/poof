@@ -83,7 +83,7 @@ pub const Config = struct {
                 optional(map, "POOF_WORKERS") orelse "4",
                 u8,
                 1,
-                64,
+                8,
             ),
             .database_pool_size = try boundedUnsigned(
                 optional(map, "POOF_DATABASE_POOL_SIZE") orelse "8",
@@ -158,10 +158,19 @@ fn validatePublicUrl(value: []const u8, environment: Environment) Error!void {
     if (std.mem.endsWith(u8, value, "/")) return error.InvalidPublicUrl;
     if (environment == .production) {
         if (!std.mem.eql(u8, uri.scheme, "https")) return error.InvalidPublicUrl;
-    } else if (!std.mem.eql(u8, uri.scheme, "https") and
-        !(std.mem.eql(u8, uri.scheme, "http") and isLocalhost(uri.host.?.percent_encoded)))
-    {
-        return error.InvalidPublicUrl;
+    } else if (environment == .development) {
+        if (!std.mem.eql(u8, uri.scheme, "https") and
+            !(std.mem.eql(u8, uri.scheme, "http") and
+                isLocalhost(uri.host.?.percent_encoded)))
+        {
+            return error.InvalidPublicUrl;
+        }
+    } else {
+        if (!std.mem.eql(u8, uri.scheme, "https") and
+            !std.mem.eql(u8, uri.scheme, "http"))
+        {
+            return error.InvalidPublicUrl;
+        }
     }
 }
 
