@@ -650,9 +650,9 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
-fn renderHero(writer: *std.Io.Writer, settings: *const @import("../../config.zig").Config) !void {
+fn renderHero(writer: *std.Io.Writer, branding: models.SiteBranding) !void {
     try writer.writeAll("<section class=\"hero\"><p class=\"lede\">");
-    try highlight.escapeHtml(writer, settings.tagline);
+    try highlight.escapeHtml(writer, branding.tagline);
     try writer.writeAll("</p><div class=\"hero-actions\">");
     try writer.writeAll("<a class=\"button button-primary\" href=\"/issues/new\">New feedback</a>");
     try writer.writeAll("<a class=\"button button-quiet\" href=\"/roadmap\">Roadmap</a></div></section>");
