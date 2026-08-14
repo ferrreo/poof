@@ -34,6 +34,11 @@ const migrations = [_]Migration{
         .name = "site_settings",
         .sql = @embedFile("migration_005"),
     },
+    .{
+        .version = 6,
+        .name = "media_relative_urls",
+        .sql = @embedFile("migration_006"),
+    },
 };
 
 const advisory_lock_id: i64 = 0x506f6f664d696772;

@@ -1,10 +1,12 @@
 const std = @import("std");
 const ploof = @import("ploof");
 const assets = @import("assets");
+const app_state = @import("../app_state.zig");
 const config = @import("../config.zig");
 const domain = @import("../domain.zig");
 const store = @import("../store.zig");
 const highlight = @import("highlight.zig");
+const request = @import("request.zig");
 
 pub const css_path = assetPath("app.css");
 pub const javascript_path = assetPath("app.js");
@@ -105,6 +107,21 @@ pub fn kindBadge(
         "<span class=\"kind kind-{s}\">{s}</span>",
         .{ @tagName(kind), kind.label() },
     );
+}
+
+pub fn htmlFailure(
+    context: *app_state.Context,
+    comptime status: ploof.response.Status,
+    kicker: []const u8,
+    title: []const u8,
+    message: []const u8,
+) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse return context.empty(status);
+    var workspace = request.Workspace.init(context) catch return context.empty(status);
+    var writer = workspace.writer();
+    errorPage(&writer, settings, kicker, title, message) catch
+        return context.empty(.internal_server_error);
+    return context.htmlBorrowed(status, workspace.rendered(&writer));
 }
 
 pub fn errorPage(

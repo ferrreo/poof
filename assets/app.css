@@ -796,6 +796,14 @@ input[type="checkbox"] {
   color: var(--color-muted);
 }
 
+.form-error {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-sm) 0;
+  color: var(--color-accent-ink);
+  font-weight: 600;
+  border-bottom: var(--rule-heavy) solid var(--color-accent-ink);
+}
+
 /* ── Comments ──────────────────────────────────────────────────────────── */
 
 .comment-list {

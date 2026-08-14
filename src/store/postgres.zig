@@ -578,7 +578,10 @@ pub const Postgres = struct {
             input.actual_behavior,
             input.environment,
             input.evidence_url,
-        }) catch return error.DatabaseUnavailable) orelse return error.Conflict;
+        }) catch return error.DatabaseUnavailable) orelse {
+            std.log.warn("createIssue board miss id={d}", .{input.board_id});
+            return error.Conflict;
+        };
         const issue_id = row.get(i64, 0) catch return error.InvalidDatabaseData;
         row.deinit() catch return error.DatabaseUnavailable;
 
@@ -999,12 +1002,7 @@ pub const Postgres = struct {
             if (text.len == 0 or text.len > domain.diagnostic_bytes_max) return error.Conflict;
         };
         if (update.evidence_url) |url| {
-            if (url.len > domain.evidence_url_bytes_max or
-                (!std.mem.startsWith(u8, url, "https://") and
-                    !std.mem.startsWith(u8, url, "http://")))
-            {
-                return error.Conflict;
-            }
+            domain.validateEvidenceUrl(url) catch return error.Conflict;
         }
 
         var slug_storage: [180]u8 = undefined;
@@ -1143,7 +1141,7 @@ pub const Postgres = struct {
             return error.Conflict;
         }
         if (logo_url) |url| {
-            if (!validHttpUrl(url, 512)) return error.Conflict;
+            domain.validateEvidenceUrl(url) catch return error.Conflict;
         }
         const affected = self.pool.exec(
             \\UPDATE site_settings SET
@@ -1679,14 +1677,6 @@ fn validSlug(value: []const u8, maximum: usize) bool {
         }
     }
     return true;
-}
-
-fn validHttpUrl(value: []const u8, maximum: usize) bool {
-    if (value.len == 0 or value.len > maximum) return false;
-    const uri = std.Uri.parse(value) catch return false;
-    return (std.mem.eql(u8, uri.scheme, "https") or
-        std.mem.eql(u8, uri.scheme, "http")) and
-        uri.host != null and uri.user == null and uri.password == null;
 }
 
 fn readChangelog(

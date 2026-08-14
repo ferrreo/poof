@@ -189,10 +189,10 @@ pub fn updateIssue(
         .pinned = input.body.pinned,
         .locked = input.body.locked,
         .duplicate_of_id = parseOptionalId(input.body.duplicate_of_id) catch
-            return context.textStatic(.unprocessable_entity, "Duplicate issue ID is invalid."),
+            return page.htmlFailure(context, .unprocessable_entity, "422", "Invalid duplicate", "Duplicate issue ID is invalid."),
     }) catch |problem| return switch (problem) {
         error.NotFound => context.empty(.not_found),
-        error.Conflict => context.textStatic(.conflict, "Invalid issue transition."),
+        error.Conflict => page.htmlFailure(context, .conflict, "409", "Invalid transition", "Invalid issue transition."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#issues");
@@ -216,7 +216,7 @@ pub fn updateSiteSettings(
         input.body.tagline,
         logo,
     ) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Branding values are invalid."),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid branding", "Branding values are invalid."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#branding");
@@ -274,7 +274,7 @@ pub fn editIssueContent(
         .environment = nonEmpty(input.body.environment),
         .evidence_url = nonEmpty(input.body.evidence_url),
     }) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Issue content is invalid."),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid content", "Issue content is invalid."),
         else => context.empty(.service_unavailable),
     };
     var target: [256]u8 = undefined;
@@ -301,7 +301,7 @@ pub fn createBoard(
         input.body.description,
         input.body.color,
     ) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Board details are invalid."),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid board", "Board details are invalid."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#boards");
@@ -322,7 +322,7 @@ pub fn archiveBoard(
         else => context.empty(.service_unavailable),
     };
     database.archiveBoard(board_id) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.conflict, "The final active board cannot be archived."),
+        error.Conflict => page.htmlFailure(context, .conflict, "409", "Cannot archive", "The final active board cannot be archived."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#boards");
@@ -350,7 +350,7 @@ pub fn updateBoard(
         input.body.sort_order,
     ) catch |problem| return switch (problem) {
         error.NotFound => context.empty(.not_found),
-        error.Conflict => context.textStatic(.unprocessable_entity, "Board details are invalid."),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid board", "Board details are invalid."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#boards");
@@ -372,7 +372,7 @@ pub fn createChangelog(
     const tags = parseTags(input.body.tags, &tag_storage);
     var issue_id_storage: [100]i64 = undefined;
     const issue_ids = parseIds(input.body.issue_ids, &issue_id_storage) catch
-        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
+        return page.htmlFailure(context, .unprocessable_entity, "422", "Invalid issues", "Linked issue IDs are invalid.");
     _ = database.createChangelogWithIssues(principal.user.id, .{
         .title = input.body.title,
         .slug = input.body.slug,
@@ -381,7 +381,7 @@ pub fn createChangelog(
         .version = nonEmpty(input.body.version),
         .tags = tags,
     }, issue_ids) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details or linked issues are invalid."),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid changelog", "Changelog details or linked issues are invalid."),
         else => context.empty(.service_unavailable),
     };
     return request.redirect(context, .see_other, "/admin#changelog");
@@ -460,7 +460,7 @@ pub fn updateChangelog(
     var tag_storage: [12][]const u8 = undefined;
     var issue_storage: [100]i64 = undefined;
     const linked = parseIds(input.body.issue_ids, &issue_storage) catch
-        return context.textStatic(.unprocessable_entity, "Linked issue IDs are invalid.");
+        return page.htmlFailure(context, .unprocessable_entity, "422", "Invalid issues", "Linked issue IDs are invalid.");
     database.updateChangelogWithIssues(changelog_id, .{
         .title = input.body.title,
         .slug = input.body.slug,
@@ -470,7 +470,7 @@ pub fn updateChangelog(
         .tags = parseTags(input.body.tags, &tag_storage),
     }, linked) catch |problem| return switch (problem) {
         error.NotFound => context.empty(.not_found),
-        error.Conflict => context.textStatic(.unprocessable_entity, "Changelog details or linked issues are invalid."),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid changelog", "Changelog details or linked issues are invalid."),
         else => context.empty(.service_unavailable),
     };
     var target: [256]u8 = undefined;
@@ -635,7 +635,7 @@ fn tryRenderIssueContentForm(
         try optionalText(writer, issue.environment);
         try writer.writeAll("</textarea></label></div>");
     }
-    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
+    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">optional — upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"text\" inputmode=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
     try optionalText(writer, issue.evidence_url);
     try writer.writeAll("\"></label>");
     try page.imageUploadControl(writer, .url);
@@ -654,7 +654,7 @@ fn renderBranding(
     try highlight.escapeHtml(writer, branding.company_name);
     try writer.writeAll("\"></label><label>Tagline<input name=\"tagline\" maxlength=\"200\" value=\"");
     try highlight.escapeHtml(writer, branding.tagline);
-    try writer.writeAll("\"></label><div class=\"upload-field\"><label>Logo URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"logo_url\" maxlength=\"512\" placeholder=\"https://.../logo.png\" value=\"");
+    try writer.writeAll("\"></label><div class=\"upload-field\"><label>Logo URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"text\" inputmode=\"url\" name=\"logo_url\" maxlength=\"512\" placeholder=\"https://.../logo.png\" value=\"");
     try optionalText(writer, branding.logo_url);
     try writer.writeAll("\"></label>");
     try page.imageUploadControl(writer, .url);

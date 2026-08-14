@@ -185,11 +185,20 @@ fn validateText(
     }
 }
 
-fn validateEvidenceUrl(value: []const u8) ValidationError!void {
+pub fn validateEvidenceUrl(value: []const u8) ValidationError!void {
     if (value.len == 0 or value.len > evidence_url_bytes_max) {
         return error.InvalidEvidenceUrl;
     }
     if (!std.unicode.utf8ValidateSlice(value)) return error.InvalidUtf8;
+    if (std.mem.startsWith(u8, value, "/media/")) {
+        const key = value["/media/".len..];
+        if (key.len == 0) return error.InvalidEvidenceUrl;
+        for (key) |byte| {
+            const ok = std.ascii.isAlphanumeric(byte) or byte == '.' or byte == '-';
+            if (!ok) return error.InvalidEvidenceUrl;
+        }
+        return;
+    }
     const uri = std.Uri.parse(value) catch return error.InvalidEvidenceUrl;
     if (!std.mem.eql(u8, uri.scheme, "https") and !std.mem.eql(u8, uri.scheme, "http")) {
         return error.InvalidEvidenceUrl;
@@ -273,6 +282,8 @@ test "evidence URLs reject executable and credential-bearing locations" {
     try std.testing.expectError(error.InvalidEvidenceUrl, validateCreateIssue(input));
     input.evidence_url = "https://user:password@example.com/private";
     try std.testing.expectError(error.InvalidEvidenceUrl, validateCreateIssue(input));
+    input.evidence_url = "/media/deadbeef.png";
+    try validateCreateIssue(input);
 }
 
 test "slugify produces stable URL components" {

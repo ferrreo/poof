@@ -66,8 +66,8 @@
     const wrap = fileInput.closest(".upload-field");
     if (wrap) {
       return (
-        wrap.querySelector('input[type="url"]') ||
-        wrap.querySelector('input[name="evidence_url"], input[name="logo_url"]')
+        wrap.querySelector('input[name="evidence_url"], input[name="logo_url"]') ||
+        wrap.querySelector('input[type="url"]')
       );
     }
     const form = fileInput.closest("form");

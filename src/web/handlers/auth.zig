@@ -7,6 +7,7 @@ const oauth_state = @import("../../auth/oauth_state.zig");
 const session = @import("../../auth/session.zig");
 const domain = @import("../../domain.zig");
 const request = @import("../request.zig");
+const page = @import("../page.zig");
 
 const StartQuery = struct {
     return_to: []const u8 = "/",
@@ -94,7 +95,13 @@ pub fn callback(
     input: CallbackDefinition.InputType,
 ) app_state.Context.ResponseType {
     if (input.query.@"error" != null) {
-        return context.textStatic(.unauthorized, "Discord authorization was cancelled.");
+        return page.htmlFailure(
+            context,
+            .unauthorized,
+            "401",
+            "Sign-in cancelled",
+            "Discord authorization was cancelled.",
+        );
     }
     const code = input.query.code orelse return context.empty(.bad_request);
     const encoded_state = input.query.state orelse return context.empty(.bad_request);

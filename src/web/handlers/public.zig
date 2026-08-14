@@ -98,9 +98,9 @@ fn renderIssueList(
     show_hero: bool,
 ) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
-        return context.textStatic(.service_unavailable, "Poof is not configured");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
     const database = app_state.database(context) orelse
-        return context.textStatic(.service_unavailable, "Database unavailable");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Database unavailable.");
     var workspace = request.Workspace.init(context) catch
         return context.empty(.service_unavailable);
     const allocator = workspace.allocator();
@@ -162,9 +162,9 @@ pub fn detail(
     input: DetailDefinition.InputType,
 ) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
-        return context.textStatic(.service_unavailable, "Poof is not configured");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
     const database = app_state.database(context) orelse
-        return context.textStatic(.service_unavailable, "Database unavailable");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Database unavailable.");
     const issue_id = request.parseIssueId(context) orelse return renderNotFound(context);
     var workspace = request.Workspace.init(context) catch
         return context.empty(.service_unavailable);
@@ -293,10 +293,6 @@ pub fn detail(
 }
 
 pub fn newIssue(context: *app_state.Context) app_state.Context.ResponseType {
-    const settings = app_state.config(context) orelse
-        return context.textStatic(.service_unavailable, "Poof is not configured");
-    const database = app_state.database(context) orelse
-        return context.textStatic(.service_unavailable, "Database unavailable");
     var workspace = request.Workspace.init(context) catch
         return context.empty(.service_unavailable);
     const allocator = workspace.allocator();
@@ -307,22 +303,14 @@ pub fn newIssue(context: *app_state.Context) app_state.Context.ResponseType {
         .see_other,
         "/auth/discord?return_to=/issues/new",
     );
-    var boards_storage: [32]models.Board = undefined;
-    const boards = database.listBoards(allocator, &boards_storage, false) catch
-        return context.empty(.service_unavailable);
-    var csrf_token = csrf.prepare(context) catch
-        return context.empty(.internal_server_error);
-
-    const branding = page.resolveBranding(allocator, database, settings);
-    var writer = workspace.writer();
-    page.begin(&writer, branding, "Share feedback", .feedback, &current.?.user) catch
-        return context.empty(.internal_server_error);
-    renderIssueForm(&writer, boards, csrf_token.hiddenInput()) catch
-        return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
-    var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
-    csrf.attach(&response, &csrf_token);
-    return response;
+    return issueFormResponse(
+        context,
+        &workspace,
+        &current.?.user,
+        emptyCreateForm(),
+        null,
+        .ok,
+    );
 }
 
 pub fn create(
@@ -330,22 +318,14 @@ pub fn create(
     input: CreateDefinition.InputType,
 ) app_state.Context.ResponseType {
     const database = app_state.database(context) orelse
-        return context.empty(.service_unavailable);
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Database unavailable.");
     var workspace = request.Workspace.init(context) catch
         return context.empty(.service_unavailable);
     const current = (request.principal(context, workspace.allocator()) catch
         return context.empty(.service_unavailable)) orelse
-        return context.empty(.unauthorized);
-    if (!(database.allowUserAction(
-        current.user.id,
-        "issue_create",
-        5,
-        60,
-    ) catch return context.empty(.service_unavailable))) {
-        return context.textStatic(.too_many_requests, "Please wait before creating more feedback.");
-    }
+        return page.htmlFailure(context, .unauthorized, "401", "Sign in required", "Sign in with Discord to submit feedback.");
     const form = input.body;
-    const issue_id = database.createIssue(current.user.id, .{
+    const payload = domain.CreateIssue{
         .board_id = form.board_id,
         .kind = form.kind,
         .title = form.title,
@@ -355,9 +335,62 @@ pub fn create(
         .actual_behavior = nonEmpty(form.actual_behavior),
         .environment = nonEmpty(form.environment),
         .evidence_url = nonEmpty(form.evidence_url),
-    }) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Please check the feedback form."),
-        else => context.empty(.service_unavailable),
+    };
+    if (!(database.allowUserAction(
+        current.user.id,
+        "issue_create",
+        5,
+        60,
+    ) catch return context.empty(.service_unavailable))) {
+        return issueFormResponse(
+            context,
+            &workspace,
+            &current.user,
+            form,
+            "Please wait before creating more feedback.",
+            .too_many_requests,
+        );
+    }
+    domain.validateCreateIssue(payload) catch |err| {
+        std.log.warn(
+            "create issue rejected: {s} board_id={d} kind={s} title_len={d} body_len={d}",
+            .{
+                @errorName(err),
+                payload.board_id,
+                @tagName(payload.kind),
+                payload.title.len,
+                payload.body.len,
+            },
+        );
+        return issueFormResponse(
+            context,
+            &workspace,
+            &current.user,
+            form,
+            createIssueErrorMessage(err),
+            .unprocessable_entity,
+        );
+    };
+    const issue_id = database.createIssue(current.user.id, payload) catch |problem| {
+        std.log.warn("create issue failed: {s}", .{@errorName(problem)});
+        return switch (problem) {
+            error.Conflict => issueFormResponse(
+                context,
+                &workspace,
+                &current.user,
+                form,
+                "Could not save this feedback. Check the board and try again.",
+                .unprocessable_entity,
+            ),
+            else => issueFormResponse(
+                context,
+                &workspace,
+                &current.user,
+                form,
+                "Could not save this feedback. Try again in a moment.",
+                .service_unavailable,
+            ),
+        };
     };
     var location: [64]u8 = undefined;
     const target = std.fmt.bufPrint(&location, "/issues/{d}", .{issue_id}) catch
@@ -382,7 +415,13 @@ pub fn vote(
         60,
         60,
     ) catch return context.empty(.service_unavailable))) {
-        return context.textStatic(.too_many_requests, "Please wait before voting again.");
+        return page.htmlFailure(
+            context,
+            .too_many_requests,
+            "429",
+            "Slow down",
+            "Please wait before voting again.",
+        );
     }
     database.setVote(issue_id, current.user.id, input.body.selected) catch
         return context.empty(.service_unavailable);
@@ -406,7 +445,13 @@ pub fn comment(
         20,
         60,
     ) catch return context.empty(.service_unavailable))) {
-        return context.textStatic(.too_many_requests, "Please wait before commenting again.");
+        return page.htmlFailure(
+            context,
+            .too_many_requests,
+            "429",
+            "Slow down",
+            "Please wait before commenting again.",
+        );
     }
     const comment_id = database.addComment(
         issue_id,
@@ -414,8 +459,20 @@ pub fn comment(
         input.body.parent_id,
         input.body.body,
     ) catch |problem| return switch (problem) {
-        error.Locked => context.textStatic(.conflict, "This discussion is locked."),
-        error.Conflict => context.textStatic(.unprocessable_entity, "Comment is invalid."),
+        error.Locked => page.htmlFailure(
+            context,
+            .conflict,
+            "423",
+            "Discussion locked",
+            "This discussion is locked.",
+        ),
+        error.Conflict => page.htmlFailure(
+            context,
+            .unprocessable_entity,
+            "422",
+            "Comment invalid",
+            "Comment is invalid. Check the length and try again.",
+        ),
         else => context.empty(.service_unavailable),
     };
     var anchor: [48]u8 = undefined;
@@ -480,7 +537,7 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
 
 pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
-        return context.textStatic(.service_unavailable, "Poof is not configured");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
     const database = app_state.database(context) orelse
         return context.empty(.service_unavailable);
     var workspace = request.Workspace.init(context) catch
@@ -536,7 +593,7 @@ pub fn changelog(
     input: ChangelogDefinition.InputType,
 ) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
-        return context.textStatic(.service_unavailable, "Poof is not configured");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
     const database = app_state.database(context) orelse
         return context.empty(.service_unavailable);
     var workspace = request.Workspace.init(context) catch
@@ -591,7 +648,7 @@ pub fn changelog(
 
 pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
-        return context.textStatic(.service_unavailable, "Poof is not configured");
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
     const database = app_state.database(context) orelse
         return context.empty(.service_unavailable);
     const slug = context.request.param("slug") orelse return context.empty(.not_found);
@@ -919,32 +976,129 @@ fn renderIssueForm(
     writer: *std.Io.Writer,
     boards: []const models.Board,
     csrf_input: []const u8,
+    values: CreateForm,
+    error_message: ?[]const u8,
 ) !void {
     try writer.writeAll("<section class=\"form-page\"><div>");
     try writer.writeAll("<h1>New feedback</h1><p>Give enough context for someone else to understand and, for bugs, reproduce it.</p></div>");
     try writer.writeAll("<form class=\"stacked-form\" method=\"post\" action=\"/issues\">");
     try writer.writeAll(csrf_input);
+    if (error_message) |message| {
+        try writer.writeAll("<p class=\"form-error\" role=\"alert\">");
+        try highlight.escapeHtml(writer, message);
+        try writer.writeAll("</p>");
+    }
     try writer.writeAll("<div class=\"form-row\"><label>Type<select name=\"kind\" data-kind-select>");
-    try writer.writeAll("<option value=\"feature\">Feature request</option><option value=\"improvement\">Improvement</option><option value=\"bug\">Bug report</option>");
+    try writeKindOption(writer, .feature, "Feature request", values.kind);
+    try writeKindOption(writer, .improvement, "Improvement", values.kind);
+    try writeKindOption(writer, .bug, "Bug report", values.kind);
     try writer.writeAll("</select></label><label>Board<select name=\"board_id\">");
     for (boards) |board| {
-        try writer.print("<option value=\"{d}\">", .{board.id});
+        try writer.print("<option value=\"{d}\"{s}>", .{
+            board.id,
+            if (board.id == values.board_id) " selected" else "",
+        });
         try highlight.escapeHtml(writer, board.name);
         try writer.writeAll("</option>");
     }
     try writer.writeAll("</select></label></div>");
-    try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" placeholder=\"A concise summary\"></label>");
-    try writer.writeAll("<label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve?\"></textarea></label>");
+    try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" placeholder=\"A concise summary\" value=\"");
+    try highlight.escapeHtml(writer, values.title);
+    try writer.writeAll("\"></label>");
+    try writer.writeAll("<label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve?\">");
+    try highlight.escapeHtml(writer, values.body);
+    try writer.writeAll("</textarea></label>");
     try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<fieldset class=\"bug-fields\" data-bug-fields><legend>Bug details</legend>");
-    try writer.writeAll("<label>Steps to reproduce<textarea name=\"reproduction_steps\" maxlength=\"8192\" rows=\"5\"></textarea></label>");
-    try writer.writeAll("<label>Expected behavior<textarea name=\"expected_behavior\" maxlength=\"8192\" rows=\"3\"></textarea></label>");
-    try writer.writeAll("<label>Actual behavior<textarea name=\"actual_behavior\" maxlength=\"8192\" rows=\"3\"></textarea></label>");
-    try writer.writeAll("<label>Environment and version<textarea name=\"environment\" maxlength=\"8192\" rows=\"3\"></textarea></label></fieldset>");
-    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" placeholder=\"https://.../screenshot.png\"></label>");
+    try writeOptionalTextarea(writer, "reproduction_steps", "Steps to reproduce", 5, values.reproduction_steps);
+    try writeOptionalTextarea(writer, "expected_behavior", "Expected behavior", 3, values.expected_behavior);
+    try writeOptionalTextarea(writer, "actual_behavior", "Actual behavior", 3, values.actual_behavior);
+    try writeOptionalTextarea(writer, "environment", "Environment and version", 3, values.environment);
+    try writer.writeAll("</fieldset>");
+    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">optional — upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"text\" inputmode=\"url\" name=\"evidence_url\" maxlength=\"512\" placeholder=\"https://.../screenshot.png\" value=\"");
+    try highlight.escapeHtml(writer, values.evidence_url orelse "");
+    try writer.writeAll("\"></label>");
     try page.imageUploadControl(writer, .url);
     try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/\">Cancel</a>");
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Submit feedback</button></div></form></section>");
+}
+
+fn writeKindOption(
+    writer: *std.Io.Writer,
+    kind: domain.IssueKind,
+    label: []const u8,
+    selected: domain.IssueKind,
+) !void {
+    try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
+        @tagName(kind),
+        if (kind == selected) " selected" else "",
+        label,
+    });
+}
+
+fn writeOptionalTextarea(
+    writer: *std.Io.Writer,
+    name: []const u8,
+    label: []const u8,
+    rows: u8,
+    value: ?[]const u8,
+) !void {
+    try writer.print(
+        "<label>{s}<textarea name=\"{s}\" maxlength=\"8192\" rows=\"{d}\">",
+        .{ label, name, rows },
+    );
+    try highlight.escapeHtml(writer, value orelse "");
+    try writer.writeAll("</textarea></label>");
+}
+
+fn emptyCreateForm() CreateForm {
+    return .{
+        .board_id = 0,
+        .kind = .feature,
+        .title = "",
+        .body = "",
+    };
+}
+
+fn createIssueErrorMessage(err: domain.ValidationError) []const u8 {
+    return switch (err) {
+        error.InvalidBoard => "Pick a board.",
+        error.InvalidTitle => "Title needs 5–160 characters.",
+        error.InvalidBody => "Description needs at least 20 characters.",
+        error.MissingBugDetails => "Bug reports need reproduction steps and what actually happened (at least 10 characters each).",
+        error.InvalidDiagnostic => "A bug-detail field is empty or too long.",
+        error.InvalidEvidenceUrl => "Evidence must be an http(s) link or uploaded image.",
+        error.InvalidUtf8 => "Text contains invalid characters.",
+    };
+}
+
+fn issueFormResponse(
+    context: *app_state.Context,
+    workspace: *request.Workspace,
+    user: *const models.User,
+    values: CreateForm,
+    error_message: ?[]const u8,
+    comptime status: ploof.response.Status,
+) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
+    const database = app_state.database(context) orelse
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Database unavailable.");
+    var boards_storage: [32]models.Board = undefined;
+    const boards = database.listBoards(workspace.allocator(), &boards_storage, false) catch
+        return context.empty(.service_unavailable);
+    var csrf_token = csrf.prepare(context) catch
+        return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(workspace.allocator(), database, settings);
+    var writer = workspace.writer();
+    page.begin(&writer, branding, "Share feedback", .feedback, user) catch
+        return context.empty(.internal_server_error);
+    renderIssueForm(&writer, boards, csrf_token.hiddenInput(), values, error_message) catch
+        return context.empty(.internal_server_error);
+    page.end(&writer) catch return context.empty(.internal_server_error);
+    var response = context.htmlBorrowed(status, workspace.rendered(&writer));
+    csrf.attach(&response, &csrf_token);
+    return response;
 }
 
 fn renderRoadmapColumn(
@@ -997,14 +1151,13 @@ fn redirectToIssue(
 }
 
 fn renderNotFound(context: *app_state.Context) app_state.Context.ResponseType {
-    const settings = app_state.config(context) orelse
-        return context.textStatic(.not_found, "Not found");
-    var workspace = request.Workspace.init(context) catch
-        return context.empty(.not_found);
-    var writer = workspace.writer();
-    page.errorPage(&writer, settings, "404", "Feedback not found", "The requested item may have moved or been removed.") catch
-        return context.empty(.not_found);
-    return context.htmlBorrowed(.not_found, workspace.rendered(&writer));
+    return page.htmlFailure(
+        context,
+        .not_found,
+        "404",
+        "Feedback not found",
+        "The requested item may have moved or been removed.",
+    );
 }
 
 fn nonEmpty(value: ?[]const u8) ?[]const u8 {

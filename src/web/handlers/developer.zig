@@ -59,7 +59,13 @@ pub fn create(
         10,
         3600,
     ) catch return context.empty(.service_unavailable))) {
-        return context.textStatic(.too_many_requests, "Token creation limit reached.");
+        return page.htmlFailure(
+            context,
+            .too_many_requests,
+            "429",
+            "Slow down",
+            "Token creation limit reached.",
+        );
     }
     var scopes = domain.ScopeSet{};
     if (input.body.read) scopes.insert(.read);
@@ -83,7 +89,13 @@ pub fn create(
         scopes,
         input.body.expires_days,
     ) catch |problem| return switch (problem) {
-        error.Conflict => context.textStatic(.unprocessable_entity, "Token details are invalid."),
+        error.Conflict => page.htmlFailure(
+            context,
+            .unprocessable_entity,
+            "422",
+            "Invalid token",
+            "Token details are invalid.",
+        ),
         else => context.empty(.service_unavailable),
     };
     return render(context, generated.slice());

@@ -180,5 +180,8 @@ fn applicationModule(
     module.addAnonymousImport("migration_005", .{
         .root_source_file = b.path("migrations/005_site_settings.sql"),
     });
+    module.addAnonymousImport("migration_006", .{
+        .root_source_file = b.path("migrations/006_media_relative_urls.sql"),
+    });
     return module;
 }
