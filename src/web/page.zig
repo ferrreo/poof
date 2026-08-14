@@ -16,6 +16,7 @@ pub const view_transition_css =
     "@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}}";
 
 pub const view_transition_style_hash: [44]u8 = blk: {
+    @setEvalBranchQuota(10_000);
     var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(view_transition_css, &digest, .{});
     var encoded: [44]u8 = undefined;
