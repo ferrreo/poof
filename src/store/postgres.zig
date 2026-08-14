@@ -563,6 +563,39 @@ pub const Postgres = struct {
         return output[0..used];
     }
 
+    pub fn listProjects(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+        output: []models.Project,
+        include_archived: bool,
+    ) models.Error![]models.Project {
+        var result = self.pool.query(
+            \\SELECT id, slug, name, git_url, sort_order,
+            \\       archived_at IS NOT NULL
+            \\FROM projects
+            \\WHERE $1 OR archived_at IS NULL
+            \\ORDER BY sort_order, id
+            \\LIMIT $2
+        , .{ include_archived, @as(i32, @intCast(output.len)) }) catch
+            return error.DatabaseUnavailable;
+        defer result.deinit();
+
+        var used: usize = 0;
+        while (result.next() catch return error.DatabaseUnavailable) |row| {
+            if (used == output.len) return error.CapacityExceeded;
+            output[used] = .{
+                .id = row.get(i64, 0) catch return error.InvalidDatabaseData,
+                .slug = try copyColumn(row, allocator, 1),
+                .name = try copyColumn(row, allocator, 2),
+                .git_url = try copyOptionalColumn(row, allocator, 3),
+                .sort_order = row.get(i32, 4) catch return error.InvalidDatabaseData,
+                .archived = row.get(bool, 5) catch return error.InvalidDatabaseData,
+            };
+            used += 1;
+        }
+        return output[0..used];
+    }
+
     pub fn createIssue(
         self: *Postgres,
         author_id: i64,
@@ -581,11 +614,18 @@ pub const Postgres = struct {
             \\INSERT INTO issues (
             \\    slug, board_id, author_id, kind, title, body_markdown,
             \\    reproduction_steps, expected_behavior, actual_behavior,
-            \\    environment, evidence_url
+            \\    environment, evidence_url, project_id
             \\)
-            \\SELECT $1, b.id, $3, $4, $5, $6, $7, $8, $9, $10, $11
+            \\SELECT $1, b.id, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
             \\FROM boards b
             \\WHERE b.id = $2 AND b.archived_at IS NULL
+            \\  AND (
+            \\      $12::bigint IS NULL
+            \\      OR EXISTS (
+            \\          SELECT 1 FROM projects p
+            \\          WHERE p.id = $12 AND p.archived_at IS NULL
+            \\      )
+            \\  )
             \\RETURNING id
         , .{
             slug,
@@ -599,6 +639,7 @@ pub const Postgres = struct {
             input.actual_behavior,
             input.environment,
             input.evidence_url,
+            input.project_id,
         }) catch return error.DatabaseUnavailable) orelse {
             std.log.warn("createIssue board miss id={d}", .{input.board_id});
             return error.Conflict;
@@ -654,6 +695,7 @@ pub const Postgres = struct {
             status,
             query,
             if (filter.completed_since_days) |days| @as(?i32, @intCast(days)) else null,
+            filter.project_id,
             @tagName(filter.sort),
             @as(i32, filter.limit),
             @as(i64, filter.offset),
@@ -675,6 +717,7 @@ pub const Postgres = struct {
             status,
             query,
             if (filter.completed_since_days) |days| @as(?i32, @intCast(days)) else null,
+            filter.project_id,
         }) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
         defer count_row.deinit() catch {};
         const total = count_row.get(i64, 0) catch return error.InvalidDatabaseData;
@@ -685,8 +728,13 @@ pub const Postgres = struct {
         self: *Postgres,
         allocator: std.mem.Allocator,
         user_id: i64,
+        limit: u8,
+        offset: u32,
         output: []models.IssueSummary,
-    ) models.Error![]models.IssueSummary {
+    ) models.Error!models.ListResult {
+        if (limit == 0 or limit > domain.page_size_max or limit > output.len) {
+            return error.CapacityExceeded;
+        }
         var result = self.pool.query(
             \\SELECT DISTINCT i.id, i.slug, b.name, i.board_id,
             \\       COALESCE(u.display_name, u.username),
@@ -694,16 +742,17 @@ pub const Postgres = struct {
             \\       i.duplicate_of_id,
             \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
             \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
-            \\       i.created_at
+            \\       i.created_at, i.project_id, p.name
             \\FROM issues i
             \\JOIN boards b ON b.id = i.board_id
             \\JOIN users u ON u.id = i.author_id
+            \\LEFT JOIN projects p ON p.id = i.project_id
             \\LEFT JOIN issue_votes own_vote
             \\       ON own_vote.issue_id = i.id AND own_vote.user_id = $1
             \\WHERE i.author_id = $1 OR own_vote.user_id = $1
             \\ORDER BY i.created_at DESC, i.id DESC
-            \\LIMIT 100
-        , .{user_id}) catch return error.DatabaseUnavailable;
+            \\LIMIT $2 OFFSET $3
+        , .{ user_id, @as(i32, limit), @as(i64, offset) }) catch return error.DatabaseUnavailable;
         defer result.deinit();
         var used: usize = 0;
         while (result.next() catch return error.DatabaseUnavailable) |row| {
@@ -711,7 +760,18 @@ pub const Postgres = struct {
             output[used] = try readIssueSummary(row, allocator);
             used += 1;
         }
-        return output[0..used];
+        var count_row = (self.pool.row(
+            \\SELECT count(*) FROM (
+            \\    SELECT DISTINCT i.id
+            \\    FROM issues i
+            \\    LEFT JOIN issue_votes own_vote
+            \\           ON own_vote.issue_id = i.id AND own_vote.user_id = $1
+            \\    WHERE i.author_id = $1 OR own_vote.user_id = $1
+            \\) counted
+        , .{user_id}) catch return error.DatabaseUnavailable) orelse return error.InvalidDatabaseData;
+        defer count_row.deinit() catch {};
+        const total = count_row.get(i64, 0) catch return error.InvalidDatabaseData;
+        return .{ .items = output[0..used], .total = total };
     }
 
     pub fn setVote(
@@ -871,7 +931,7 @@ pub const Postgres = struct {
         ) catch return error.DatabaseUnavailable;
 
         var previous = (connection.row(
-            \\SELECT status, priority, board_id, pinned, locked, duplicate_of_id
+            \\SELECT status, priority, board_id, pinned, locked, duplicate_of_id, project_id
             \\FROM issues WHERE id = $1 FOR UPDATE
         , .{issue_id}) catch return error.DatabaseUnavailable) orelse return error.NotFound;
         const old_status = previous.get([]const u8, 0) catch return error.InvalidDatabaseData;
@@ -880,6 +940,7 @@ pub const Postgres = struct {
         const old_pinned = previous.get(bool, 3) catch return error.InvalidDatabaseData;
         const old_locked = previous.get(bool, 4) catch return error.InvalidDatabaseData;
         const old_duplicate = previous.get(?i64, 5) catch return error.InvalidDatabaseData;
+        const old_project = previous.get(?i64, 6) catch return error.InvalidDatabaseData;
         var old_status_copy: [16]u8 = undefined;
         var old_priority_copy: [16]u8 = undefined;
         if (old_status.len > old_status_copy.len or old_priority.len > old_priority_copy.len) {
@@ -915,6 +976,7 @@ pub const Postgres = struct {
             \\UPDATE issues SET
             \\    status = $2, priority = $3, board_id = $4,
             \\    pinned = $5, locked = $6, duplicate_of_id = $7,
+            \\    project_id = $8,
             \\    completed_at = CASE
             \\        WHEN $2 = 'completed' THEN COALESCE(completed_at, now())
             \\        ELSE NULL
@@ -924,6 +986,10 @@ pub const Postgres = struct {
             \\        ELSE NULL
             \\    END
             \\WHERE id = $1
+            \\  AND (
+            \\      $8::bigint IS NULL
+            \\      OR EXISTS (SELECT 1 FROM projects p WHERE p.id = $8)
+            \\  )
         , .{
             issue_id,
             @tagName(update.status),
@@ -932,6 +998,7 @@ pub const Postgres = struct {
             update.pinned,
             update.locked,
             update.duplicate_of_id,
+            update.project_id,
         }) catch return error.DatabaseUnavailable;
         if ((affected orelse 0) != 1) return error.NotFound;
 
@@ -998,6 +1065,16 @@ pub const Postgres = struct {
                 null,
             );
         }
+        if (old_project != update.project_id) {
+            try insertEvent(
+                connection,
+                issue_id,
+                actor_id,
+                "project_changed",
+                null,
+                null,
+            );
+        }
         connection.commit() catch return error.DatabaseUnavailable;
     }
 
@@ -1025,6 +1102,7 @@ pub const Postgres = struct {
         if (update.evidence_url) |url| {
             domain.validateEvidenceUrl(url) catch return error.Conflict;
         }
+        if (update.project_id) |project_id| if (project_id <= 0) return error.Conflict;
 
         var slug_storage: [180]u8 = undefined;
         const slug = domain.slugify(update.title, &slug_storage) catch return error.Conflict;
@@ -1055,8 +1133,17 @@ pub const Postgres = struct {
             \\UPDATE issues SET
             \\    slug = $2, title = $3, body_markdown = $4,
             \\    reproduction_steps = $5, expected_behavior = $6,
-            \\    actual_behavior = $7, environment = $8, evidence_url = $9
+            \\    actual_behavior = $7, environment = $8, evidence_url = $9,
+            \\    project_id = $10
             \\WHERE id = $1
+            \\  AND (
+            \\      $10::bigint IS NULL
+            \\      OR EXISTS (
+            \\          SELECT 1 FROM projects p
+            \\          WHERE p.id = $10
+            \\            AND (p.archived_at IS NULL OR issues.project_id = $10)
+            \\      )
+            \\  )
             \\  AND (
             \\      kind <> 'bug'
             \\      OR (
@@ -1074,6 +1161,7 @@ pub const Postgres = struct {
             update.actual_behavior,
             update.environment,
             update.evidence_url,
+            update.project_id,
         }) catch return error.DatabaseUnavailable;
         if ((affected orelse 0) != 1) return error.Conflict;
         try insertEvent(connection, issue_id, actor_id, "edited", null, null);
@@ -1150,6 +1238,66 @@ pub const Postgres = struct {
             \\    color = $5, sort_order = $6
             \\WHERE id = $1
         , .{ board_id, name, slug, description, color, sort_order }) catch
+            return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+    }
+
+    pub fn createProject(
+        self: *Postgres,
+        name: []const u8,
+        slug: []const u8,
+        git_url: ?[]const u8,
+    ) models.Error!i64 {
+        if (!validProject(name, slug, git_url)) return error.Conflict;
+        var connection = self.pool.acquire() catch return error.DatabaseUnavailable;
+        defer connection.release();
+        connection.begin() catch return error.DatabaseUnavailable;
+        errdefer connection.tryRollback() catch {};
+        _ = connection.exec(
+            "SELECT pg_advisory_xact_lock(5790053260621242964)",
+            .{},
+        ) catch return error.DatabaseUnavailable;
+        var row = (connection.row(
+            \\INSERT INTO projects (name, slug, git_url, sort_order)
+            \\SELECT
+            \\    $1, $2, $3,
+            \\    COALESCE((SELECT max(sort_order) + 1 FROM projects), 0)
+            \\WHERE (SELECT count(*) FROM projects) < 32
+            \\RETURNING id
+        , .{ name, slug, git_url }) catch
+            return error.DatabaseUnavailable) orelse return error.Conflict;
+        const project_id = row.get(i64, 0) catch return error.InvalidDatabaseData;
+        row.deinit() catch return error.DatabaseUnavailable;
+        connection.commit() catch return error.DatabaseUnavailable;
+        return project_id;
+    }
+
+    pub fn archiveProject(self: *Postgres, project_id: i64) models.Error!void {
+        const affected = self.pool.exec(
+            \\UPDATE projects SET archived_at = now()
+            \\WHERE id = $1 AND archived_at IS NULL
+        , .{project_id}) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.Conflict;
+    }
+
+    pub fn updateProject(
+        self: *Postgres,
+        project_id: i64,
+        name: []const u8,
+        slug: []const u8,
+        git_url: ?[]const u8,
+        sort_order: i32,
+    ) models.Error!void {
+        if (!validProject(name, slug, git_url) or
+            sort_order < 0 or sort_order > 10_000)
+        {
+            return error.Conflict;
+        }
+        const affected = self.pool.exec(
+            \\UPDATE projects SET
+            \\    name = $2, slug = $3, git_url = $4, sort_order = $5
+            \\WHERE id = $1
+        , .{ project_id, name, slug, git_url, sort_order }) catch
             return error.DatabaseUnavailable;
         if ((affected orelse 0) != 1) return error.NotFound;
     }
@@ -1344,11 +1492,12 @@ pub const Postgres = struct {
             \\       i.duplicate_of_id,
             \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
             \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
-            \\       i.created_at
+            \\       i.created_at, i.project_id, p.name
             \\FROM changelog_issue_links link
             \\JOIN issues i ON i.id = link.issue_id
             \\JOIN boards b ON b.id = i.board_id
             \\JOIN users u ON u.id = i.author_id
+            \\LEFT JOIN projects p ON p.id = i.project_id
             \\WHERE link.changelog_id = $1
             \\ORDER BY link.sort_order, i.id
         , .{changelog_id}) catch return error.DatabaseUnavailable;
@@ -1408,6 +1557,16 @@ pub const Postgres = struct {
         return output[0..used];
     }
 
+    pub fn countChangelogs(self: *Postgres, published_only: bool) models.Error!i64 {
+        var row = (self.pool.row(
+            \\SELECT count(*) FROM changelog_entries c
+            \\ WHERE (NOT $1 OR c.status = 'published')
+        , .{published_only}) catch return error.DatabaseUnavailable) orelse
+            return error.InvalidDatabaseData;
+        defer row.deinit() catch {};
+        return row.get(i64, 0) catch return error.InvalidDatabaseData;
+    }
+
     pub fn getChangelogBySlug(
         self: *Postgres,
         allocator: std.mem.Allocator,
@@ -1445,16 +1604,18 @@ const issue_select =
     \\       i.pinned, i.locked,
     \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
     \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
-    \\       i.created_at, i.updated_at
+    \\       i.created_at, i.updated_at, i.project_id, p.name, p.git_url
     \\FROM issues i
     \\JOIN boards b ON b.id = i.board_id
     \\JOIN users u ON u.id = i.author_id
+    \\LEFT JOIN projects p ON p.id = i.project_id
 ;
 
 const issue_filter =
     \\ FROM issues i
     \\ JOIN boards b ON b.id = i.board_id
     \\ JOIN users u ON u.id = i.author_id
+    \\ LEFT JOIN projects p ON p.id = i.project_id
     \\ WHERE ($1::bigint IS NULL OR i.board_id = $1)
     \\   AND ($2::text IS NULL OR i.kind = $2)
     \\   AND ($3::text IS NULL OR i.status = $3)
@@ -1468,6 +1629,7 @@ const issue_filter =
     \\       OR i.status <> 'completed'
     \\       OR i.completed_at > now() - make_interval(days => $5)
     \\   )
+    \\   AND ($6::bigint IS NULL OR i.project_id = $6)
 ;
 
 const issue_list_sql =
@@ -1477,14 +1639,14 @@ const issue_list_sql =
     \\       i.duplicate_of_id,
     \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id),
     \\       (SELECT count(*) FROM comments c WHERE c.issue_id = i.id AND c.deleted_at IS NULL),
-    \\       i.created_at
+    \\       i.created_at, i.project_id, p.name
 ++ issue_filter ++
     \\ ORDER BY i.pinned DESC,
-    \\   CASE WHEN $6 = 'top' THEN
+    \\   CASE WHEN $7 = 'top' THEN
     \\       (SELECT count(*) FROM issue_votes v WHERE v.issue_id = i.id)
     \\   END DESC,
     \\   i.created_at DESC, i.id DESC
-    \\ LIMIT $7 OFFSET $8
+    \\ LIMIT $8 OFFSET $9
 ;
 
 const issue_count_sql = "SELECT count(*)" ++ issue_filter;
@@ -1565,6 +1727,9 @@ fn readIssue(
         .comment_count = row.get(i64, 20) catch return error.InvalidDatabaseData,
         .created_at_us = row.get(i64, 21) catch return error.InvalidDatabaseData,
         .updated_at_us = row.get(i64, 22) catch return error.InvalidDatabaseData,
+        .project_id = row.get(?i64, 23) catch return error.InvalidDatabaseData,
+        .project_name = try copyOptionalQueryColumn(row, allocator, 24),
+        .project_git_url = try copyOptionalQueryColumn(row, allocator, 25),
     };
 }
 
@@ -1591,6 +1756,8 @@ fn readIssueSummary(
         .vote_count = row.get(i64, 12) catch return error.InvalidDatabaseData,
         .comment_count = row.get(i64, 13) catch return error.InvalidDatabaseData,
         .created_at_us = row.get(i64, 14) catch return error.InvalidDatabaseData,
+        .project_id = row.get(?i64, 15) catch return error.InvalidDatabaseData,
+        .project_name = try copyOptionalColumn(row, allocator, 16),
     };
 }
 
@@ -1686,6 +1853,14 @@ fn validBoard(
         if (std.mem.eql(u8, color, allowed)) return true;
     }
     return false;
+}
+
+fn validProject(name: []const u8, slug: []const u8, git_url: ?[]const u8) bool {
+    if (!validPlainText(name, 1, 80) or !validSlug(slug, 80)) return false;
+    if (git_url) |url| {
+        domain.validateGitUrl(url) catch return false;
+    }
+    return true;
 }
 
 fn validPlainText(value: []const u8, minimum: usize, maximum: usize) bool {

@@ -21,14 +21,14 @@ modern-minimal
 Studied DNA from https://pika-os.com. Warm paper yellows, ink borders, bright
 amber accent.
 
-- `--color-paper`   oklch(97.5% 0.015 96)
-- `--color-paper-2` oklch(95.5% 0.018 96)
-- `--color-paper-3` oklch(93% 0.022 96)
-- `--color-ink`     oklch(26% 0.012 96)
-- `--color-ink-2`   oklch(32% 0.012 96)
-- `--color-rule`    oklch(82% 0.014 96)
-- `--color-accent`  oklch(90.2% 0.173 96.7)
-- `--color-focus`   oklch(72% 0.16 96.7)
+- `--color-paper`   light-dark(oklch(97.5% 0.015 96), oklch(16% 0.012 96))
+- `--color-paper-2` light-dark(oklch(95.5% 0.018 96), oklch(20% 0.014 96))
+- `--color-paper-3` light-dark(oklch(93% 0.022 96), oklch(24% 0.016 96))
+- `--color-ink`     light-dark(oklch(26% 0.012 96), oklch(94% 0.012 96))
+- `--color-ink-2`   light-dark(oklch(32% 0.012 96), oklch(88% 0.012 96))
+- `--color-rule`    light-dark(oklch(82% 0.014 96), oklch(34% 0.014 96))
+- `--color-accent`  light-dark(oklch(90.2% 0.173 96.7), oklch(84% 0.145 96.7))
+- `--color-focus`   light-dark(oklch(72% 0.16 96.7), oklch(78% 0.14 96.7))
 
 ## Typography
 
@@ -78,6 +78,9 @@ tokens (`var(--space-md)`), never raw values.
 - Site title (and optional logo) from admin branding settings.
 - Amber accent at ≤ 8 % of any viewport (active nav underline, focus, primary
   CTA text).
+- Color scheme follows `prefers-color-scheme` unless the visitor pins Light or
+  Dark via the header control (`poof_theme` cookie, `data-theme` on `<html>`).
+  Same hue 96 in both modes. Dark paper is warm, not black.
 - Ubuntu Sans + JetBrains Mono.
 - Compact CTA voice (radius-sm, ink primary with accent text, bordered secondary).
 - Stacked section heads. No hanging left-margin labels.

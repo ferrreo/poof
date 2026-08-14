@@ -1,14 +1,47 @@
 (() => {
   "use strict";
 
-  document.documentElement.classList.add("js");
+  const themeCookie = "poof_theme";
+  const themeToggle = document.querySelector("[data-theme-toggle]");
+  const themeLabel = (mode) => {
+    if (mode === "dark") return "Dark";
+    if (mode === "light") return "Light";
+    return "Auto";
+  };
+  const readTheme = () => {
+    const value = document.documentElement.getAttribute("data-theme");
+    if (value === "dark" || value === "light") return value;
+    return "system";
+  };
+  const writeThemeCookie = (mode) => {
+    const secure = location.protocol === "https:" ? "; Secure" : "";
+    if (mode === "system") {
+      document.cookie = `${themeCookie}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
+      return;
+    }
+    document.cookie = `${themeCookie}=${mode}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  };
+  const applyTheme = (mode) => {
+    if (mode === "system") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", mode);
+    writeThemeCookie(mode);
+    if (themeToggle) {
+      themeToggle.textContent = themeLabel(mode);
+      themeToggle.setAttribute("aria-label", `Color scheme, ${themeLabel(mode)}`);
+    }
+  };
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      const next = { system: "dark", dark: "light", light: "system" };
+      applyTheme(next[readTheme()] || "dark");
+    });
+  }
 
   const kindSelect = document.querySelector("[data-kind-select]");
   const bugFields = document.querySelector("[data-bug-fields]");
   if (kindSelect && bugFields) {
     const updateBugFields = () => {
       const isBug = kindSelect.value === "bug";
-      bugFields.classList.toggle("visible", isBug);
       for (const field of bugFields.querySelectorAll(
         '[name="reproduction_steps"], [name="actual_behavior"]',
       )) {
@@ -164,6 +197,17 @@
   for (const fileInput of document.querySelectorAll("[data-image-upload]")) {
     fileInput.addEventListener("change", () => {
       void uploadImage(fileInput);
+    });
+  }
+
+  const groups = document.querySelectorAll(".status-group");
+  for (const button of document.querySelectorAll("[data-groups]")) {
+    button.addEventListener("click", () => {
+      const open = button.getAttribute("data-groups") === "expand";
+      for (const group of groups) {
+        if (open) group.setAttribute("open", "");
+        else group.removeAttribute("open");
+      }
     });
   }
 })();

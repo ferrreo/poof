@@ -388,6 +388,64 @@ test "PostgreSQL migrations and feedback lifecycle" {
         }),
     );
 
+    const project_id = try database.createProject(
+        "Welcome App",
+        "welcome-app",
+        "https://github.com/PikaOS-Linux/welcome",
+    );
+    try std.testing.expectError(error.Conflict, database.createProject(
+        "Nope",
+        "nope",
+        "javascript:alert(1)",
+    ));
+    var project_storage: [8]poof.store.Project = undefined;
+    const projects = try database.listProjects(arena, &project_storage, false);
+    try std.testing.expectEqual(@as(usize, 1), projects.len);
+    try std.testing.expectEqualStrings("welcome-app", projects[0].slug);
+    try std.testing.expectEqualStrings(
+        "https://github.com/PikaOS-Linux/welcome",
+        projects[0].git_url.?,
+    );
+
+    const project_issue = try database.createIssue(member.id, .{
+        .board_id = boards[0].id,
+        .project_id = project_id,
+        .kind = .feature,
+        .title = "Welcome App first-run copy",
+        .body = "The first-run screen should name the git repository it belongs to.",
+    });
+    const with_project = try database.getIssue(arena, project_issue);
+    try std.testing.expectEqual(project_id, with_project.project_id.?);
+    try std.testing.expectEqualStrings("Welcome App", with_project.project_name.?);
+    try std.testing.expectEqualStrings(
+        "https://github.com/PikaOS-Linux/welcome",
+        with_project.project_git_url.?,
+    );
+
+    var project_issues: [8]poof.store.IssueSummary = undefined;
+    const filtered = try database.listIssues(arena, .{
+        .project_id = project_id,
+        .limit = 8,
+    }, &project_issues);
+    try std.testing.expectEqual(@as(i64, 1), filtered.total);
+    try std.testing.expectEqualStrings("Welcome App", filtered.items[0].project_name.?);
+
+    try database.archiveProject(project_id);
+    try std.testing.expectError(error.Conflict, database.createIssue(member.id, .{
+        .board_id = boards[0].id,
+        .project_id = project_id,
+        .kind = .feature,
+        .title = "Must not attach to archived project",
+        .body = "Archived projects must reject newly submitted feedback.",
+    }));
+    try database.editIssueContent(project_issue, member.id, .{
+        .title = "Welcome App first-run copy",
+        .body_markdown = "Authors can keep an archived project on an existing issue.",
+        .project_id = project_id,
+    });
+    const kept = try database.getIssue(arena, project_issue);
+    try std.testing.expectEqual(project_id, kept.project_id.?);
+
     const changelog_id = try database.createChangelogWithIssues(admin.id, .{
         .slug = "portable-exports",
         .title = "Portable exports are here",

@@ -97,13 +97,19 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         "/issues/:id/comments",
         public_handlers.CommentDefinition.handle(public_handlers.comment),
     ),
-    ploof.get("/roadmap", public_handlers.roadmap),
+    ploof.get(
+        "/roadmap",
+        public_handlers.RoadmapDefinition.handle(public_handlers.roadmap),
+    ),
     ploof.get(
         "/changelog",
         public_handlers.ChangelogDefinition.handle(public_handlers.changelog),
     ),
     ploof.get("/changelog/:slug", public_handlers.changelogDetail),
-    ploof.get("/me", public_handlers.me),
+    ploof.get(
+        "/me",
+        public_handlers.MeDefinition.handle(public_handlers.me),
+    ),
     ploof.get(
         "/admin",
         admin_handlers.DashboardDefinition.handle(admin_handlers.dashboard),
@@ -132,6 +138,18 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
     ploof.post(
         "/admin/boards/:id/archive",
         admin_handlers.BoardArchiveDefinition.handle(admin_handlers.archiveBoard),
+    ),
+    ploof.post(
+        "/admin/projects",
+        admin_handlers.ProjectCreateDefinition.handle(admin_handlers.createProject),
+    ),
+    ploof.post(
+        "/admin/projects/:id",
+        admin_handlers.ProjectUpdateDefinition.handle(admin_handlers.updateProject),
+    ),
+    ploof.post(
+        "/admin/projects/:id/archive",
+        admin_handlers.ProjectArchiveDefinition.handle(admin_handlers.archiveProject),
     ),
     ploof.post(
         "/admin/changelog",

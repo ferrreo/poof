@@ -30,7 +30,8 @@ pub const IssueUpdateDefinition = ploof.Endpoint(.{
         pinned: bool = false,
         locked: bool = false,
         duplicate_of_id: ?[]const u8 = null,
-    }, formOptions(12 * 1024, 8)),
+        project_id: i64 = 0,
+    }, formOptions(12 * 1024, 10)),
 });
 
 pub const IssueContentDefinition = ploof.Endpoint(.{
@@ -42,7 +43,8 @@ pub const IssueContentDefinition = ploof.Endpoint(.{
         actual_behavior: ?[]const u8 = null,
         environment: ?[]const u8 = null,
         evidence_url: ?[]const u8 = null,
-    }, formOptions(64 * 1024, 12)),
+        project_id: i64 = 0,
+    }, formOptions(64 * 1024, 14)),
 });
 
 pub const BoardCreateDefinition = ploof.Endpoint(.{
@@ -64,6 +66,27 @@ pub const BoardUpdateDefinition = ploof.Endpoint(.{
         slug: []const u8,
         description: []const u8 = "",
         color: []const u8 = "violet",
+        sort_order: i32,
+    }, formOptions(4 * 1024, 8)),
+});
+
+pub const ProjectCreateDefinition = ploof.Endpoint(.{
+    .body = ploof.Form.typed(struct {
+        name: []const u8,
+        slug: []const u8,
+        git_url: ?[]const u8 = null,
+    }, formOptions(4 * 1024, 6)),
+});
+
+pub const ProjectArchiveDefinition = ploof.Endpoint(.{
+    .body = ploof.Form.typed(struct { confirm: bool }, formOptions(1024, 2)),
+});
+
+pub const ProjectUpdateDefinition = ploof.Endpoint(.{
+    .body = ploof.Form.typed(struct {
+        name: []const u8,
+        slug: []const u8,
+        git_url: ?[]const u8 = null,
         sort_order: i32,
     }, formOptions(4 * 1024, 8)),
 });
@@ -110,7 +133,7 @@ pub fn dashboard(
         error.Forbidden => context.empty(.forbidden),
         else => context.empty(.service_unavailable),
     };
-    var issue_storage: [20]models.IssueSummary = undefined;
+    var issue_storage: [domain.list_page_size]models.IssueSummary = undefined;
     const query = input.query;
     const issues = database.listIssues(allocator, .{
         .query = query.q,
@@ -123,42 +146,50 @@ pub fn dashboard(
             .completed => .completed,
             .closed => .closed,
         },
-        .limit = 20,
-        .offset = (@as(u32, @max(query.page, 1)) - 1) * 20,
+        .limit = domain.list_page_size,
+        .offset = (@as(u32, @max(query.page, 1)) - 1) * domain.list_page_size,
     }, &issue_storage) catch
         return context.empty(.service_unavailable);
     var board_storage: [32]models.Board = undefined;
     const boards = database.listBoards(allocator, &board_storage, true) catch
         return context.empty(.service_unavailable);
-    var changelog_storage: [20]models.Changelog = undefined;
+    var project_storage: [32]models.Project = undefined;
+    const projects = database.listProjects(allocator, &project_storage, true) catch
+        return context.empty(.service_unavailable);
+    var changelog_storage: [domain.list_page_size]models.Changelog = undefined;
     const changelogs = database.listChangelogsPage(
         allocator,
         false,
-        20,
-        (@as(u32, @max(query.release_page, 1)) - 1) * 20,
+        domain.list_page_size,
+        (@as(u32, @max(query.release_page, 1)) - 1) * domain.list_page_size,
         &changelog_storage,
     ) catch return context.empty(.service_unavailable);
+    const changelog_total = database.countChangelogs(false) catch
+        return context.empty(.service_unavailable);
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
     const branding = page.resolveBranding(allocator, database, settings);
 
     var writer = workspace.writer();
-    page.begin(&writer, branding, "Admin", .admin, &principal.user) catch
+    page.begin(&writer, branding, "Admin", .admin, &principal.user, page.colorScheme(context)) catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"admin-shell\"><header class=\"admin-heading\"><div>") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>Triage</h1><p>Status, priority, boards, branding, and release notes for this company.</p></div>") catch
+    writer.writeAll("<h1>Triage</h1><p>Status, priority, boards, projects, branding, and release notes for this company.</p></div>") catch
         return context.empty(.internal_server_error);
     writer.print("<div class=\"admin-stat\"><strong>{d}</strong><span>feedback items</span></div></header>", .{issues.total}) catch
         return context.empty(.internal_server_error);
     renderBranding(&writer, branding, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
-    renderIssues(&writer, issues, boards, token.hiddenInput(), query) catch
+    renderIssues(&writer, issues, boards, projects, token.hiddenInput(), query) catch
         return context.empty(.internal_server_error);
     renderBoards(&writer, boards, token.hiddenInput()) catch
+        return context.empty(.internal_server_error);
+    renderProjects(&writer, projects, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
     renderChangelogs(
         &writer,
         changelogs,
+        changelog_total,
         @max(query.release_page, 1),
         token.hiddenInput(),
     ) catch
@@ -190,6 +221,7 @@ pub fn updateIssue(
         .locked = input.body.locked,
         .duplicate_of_id = parseOptionalId(input.body.duplicate_of_id) catch
             return page.htmlFailure(context, .unprocessable_entity, "422", "Invalid duplicate", "Duplicate issue ID is invalid."),
+        .project_id = if (input.body.project_id > 0) input.body.project_id else null,
     }) catch |problem| return switch (problem) {
         error.NotFound => context.empty(.not_found),
         error.Conflict => page.htmlFailure(context, .conflict, "409", "Invalid transition", "Invalid issue transition."),
@@ -266,6 +298,7 @@ pub fn editIssueContent(
         .actual_behavior = nonEmpty(input.body.actual_behavior),
         .environment = nonEmpty(input.body.environment),
         .evidence_url = nonEmpty(input.body.evidence_url),
+        .project_id = input.body.project_id,
     };
     database.editIssueContent(issue_id, principal.user.id, .{
         .title = values.title,
@@ -275,6 +308,7 @@ pub fn editIssueContent(
         .actual_behavior = values.actual_behavior,
         .environment = values.environment,
         .evidence_url = values.evidence_url,
+        .project_id = if (values.project_id > 0) values.project_id else null,
     }) catch |problem| return switch (problem) {
         error.Conflict => adminEditFormResponse(
             context,
@@ -368,6 +402,77 @@ pub fn updateBoard(
     return request.redirect(context, .see_other, "/admin#boards");
 }
 
+pub fn createProject(
+    context: *app_state.Context,
+    input: ProjectCreateDefinition.InputType,
+) app_state.Context.ResponseType {
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    _ = adminPrincipal(context, workspace.allocator()) catch |problem| return switch (problem) {
+        error.Forbidden => context.empty(.forbidden),
+        else => context.empty(.service_unavailable),
+    };
+    _ = database.createProject(
+        input.body.name,
+        input.body.slug,
+        nonEmpty(input.body.git_url),
+    ) catch |problem| return switch (problem) {
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid project", "Project name, slug, or git URL is invalid."),
+        else => context.empty(.service_unavailable),
+    };
+    return request.redirect(context, .see_other, "/admin#projects");
+}
+
+pub fn archiveProject(
+    context: *app_state.Context,
+    input: ProjectArchiveDefinition.InputType,
+) app_state.Context.ResponseType {
+    if (!input.body.confirm) return context.empty(.bad_request);
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    const project_id = request.parseIssueId(context) orelse return context.empty(.not_found);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    _ = adminPrincipal(context, workspace.allocator()) catch |problem| return switch (problem) {
+        error.Forbidden => context.empty(.forbidden),
+        else => context.empty(.service_unavailable),
+    };
+    database.archiveProject(project_id) catch |problem| return switch (problem) {
+        error.Conflict => page.htmlFailure(context, .conflict, "409", "Cannot archive", "This project is already archived."),
+        else => context.empty(.service_unavailable),
+    };
+    return request.redirect(context, .see_other, "/admin#projects");
+}
+
+pub fn updateProject(
+    context: *app_state.Context,
+    input: ProjectUpdateDefinition.InputType,
+) app_state.Context.ResponseType {
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    const project_id = request.parseIssueId(context) orelse return context.empty(.not_found);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    _ = adminPrincipal(context, workspace.allocator()) catch |problem| return switch (problem) {
+        error.Forbidden => context.empty(.forbidden),
+        else => context.empty(.service_unavailable),
+    };
+    database.updateProject(
+        project_id,
+        input.body.name,
+        input.body.slug,
+        nonEmpty(input.body.git_url),
+        input.body.sort_order,
+    ) catch |problem| return switch (problem) {
+        error.NotFound => context.empty(.not_found),
+        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid project", "Project details are invalid."),
+        else => context.empty(.service_unavailable),
+    };
+    return request.redirect(context, .see_other, "/admin#projects");
+}
+
 pub fn createChangelog(
     context: *app_state.Context,
     input: ChangelogCreateDefinition.InputType,
@@ -446,7 +551,7 @@ pub fn editChangelogPage(context: *app_state.Context) app_state.Context.Response
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
     const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, branding, "Edit changelog", .admin, &principal.user) catch
+    page.begin(&writer, branding, "Edit changelog", .admin, &principal.user, page.colorScheme(context)) catch
         return context.empty(.internal_server_error);
     renderChangelogEditForm(&writer, entry, linked, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -505,6 +610,7 @@ fn renderIssues(
     writer: *std.Io.Writer,
     result: models.ListResult,
     boards: []const models.Board,
+    projects: []const models.Project,
     csrf_input: []const u8,
     query: DashboardQuery,
 ) !void {
@@ -559,6 +665,17 @@ fn renderIssues(
             try highlight.escapeHtml(writer, board.name);
             try writer.writeAll("</option>");
         }
+        try writer.writeAll("</select></label>");
+        try writer.writeAll("<label>Project<select name=\"project_id\"><option value=\"0\">None</option>");
+        for (projects) |project| {
+            if (project.archived and issue.project_id != project.id) continue;
+            try writer.print("<option value=\"{d}\"{s}>", .{
+                project.id,
+                if (issue.project_id == project.id) " selected" else "",
+            });
+            try highlight.escapeHtml(writer, project.name);
+            try writer.writeAll("</option>");
+        }
         try writer.print("</select></label><label class=\"check\"><input type=\"checkbox\" name=\"pinned\" value=\"true\"{s}> Pin</label>", .{
             if (issue.pinned) " checked" else "",
         });
@@ -575,12 +692,28 @@ fn renderIssues(
     try writer.writeAll("</div><nav class=\"pagination\" aria-label=\"Admin feedback pages\">");
     const page_number = @max(query.page, 1);
     if (page_number > 1) {
-        try writer.print("<a class=\"button button-quiet\" href=\"/admin?page={d}\">← Previous</a>", .{page_number - 1});
+        try writer.writeAll("<a class=\"button button-quiet\" href=\"");
+        try writeAdminIssuesHref(writer, query, page_number - 1);
+        try writer.writeAll("\">← Previous</a>");
     }
-    if (@as(i64, page_number) * 20 < result.total) {
-        try writer.print("<a class=\"button button-quiet\" href=\"/admin?page={d}\">Next →</a>", .{page_number + 1});
+    if (@as(i64, page_number) * domain.list_page_size < result.total) {
+        try writer.writeAll("<a class=\"button button-quiet\" href=\"");
+        try writeAdminIssuesHref(writer, query, page_number + 1);
+        try writer.writeAll("\">Next →</a>");
     }
     try writer.writeAll("</nav></section>");
+}
+
+fn writeAdminIssuesHref(
+    writer: *std.Io.Writer,
+    query: DashboardQuery,
+    target_page: u16,
+) !void {
+    try writer.print("/admin?page={d}&status={s}", .{ target_page, @tagName(query.status) });
+    if (query.q) |value| {
+        try writer.writeAll("&q=");
+        try page.writeQueryComponent(writer, value);
+    }
 }
 
 fn renderBoards(
@@ -624,6 +757,51 @@ fn renderBoards(
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Add board</button></form></section>");
 }
 
+fn renderProjects(
+    writer: *std.Io.Writer,
+    projects: []const models.Project,
+    csrf_input: []const u8,
+) !void {
+    try writer.writeAll("<section class=\"admin-section\" id=\"projects\"><div class=\"admin-section-heading\"><h2>Projects</h2></div><div class=\"board-admin-grid\">");
+    for (projects) |project| {
+        try writer.writeAll("<article class=\"admin-card\"><div><strong>");
+        try highlight.escapeHtml(writer, project.name);
+        try writer.writeAll("</strong>");
+        if (project.git_url) |git_url| {
+            try writer.writeAll("<p><a class=\"text-link\" rel=\"nofollow noopener\" href=\"");
+            try highlight.escapeHtml(writer, git_url);
+            try writer.writeAll("\">");
+            try highlight.escapeHtml(writer, git_url);
+            try writer.writeAll("</a></p>");
+        }
+        try writer.writeAll("</div>");
+        if (project.archived) {
+            try writer.writeAll("<span class=\"status status-closed\">Archived</span>");
+        } else {
+            try writer.writeAll("<div class=\"admin-card-tools\">");
+            try writer.print("<form class=\"board-edit\" method=\"post\" action=\"/admin/projects/{d}\">", .{project.id});
+            try writer.writeAll(csrf_input);
+            try writer.writeAll("<label>Name<input name=\"name\" required maxlength=\"80\" value=\"");
+            try highlight.escapeHtml(writer, project.name);
+            try writer.writeAll("\"></label><label>Slug<input name=\"slug\" required maxlength=\"80\" value=\"");
+            try highlight.escapeHtml(writer, project.slug);
+            try writer.writeAll("\"></label><label>Git URL<input type=\"url\" name=\"git_url\" maxlength=\"512\" placeholder=\"https://github.com/org/repo\" value=\"");
+            if (project.git_url) |git_url| try highlight.escapeHtml(writer, git_url);
+            try writer.print("\"></label><label>Order<input type=\"number\" name=\"sort_order\" min=\"0\" max=\"10000\" value=\"{d}\"></label>", .{project.sort_order});
+            try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Save</button></form>");
+            try writer.print("<form class=\"board-archive\" method=\"post\" action=\"/admin/projects/{d}/archive\" data-confirm=\"Archive this project?\">", .{project.id});
+            try writer.writeAll(csrf_input);
+            try writer.writeAll("<input type=\"hidden\" name=\"confirm\" value=\"true\"><button class=\"button button-quiet\" type=\"submit\">Archive</button></form></div>");
+        }
+        try writer.writeAll("</article>");
+    }
+    try writer.writeAll("</div><form class=\"admin-card inline-create\" method=\"post\" action=\"/admin/projects\">");
+    try writer.writeAll(csrf_input);
+    try writer.writeAll("<label>Name<input name=\"name\" required maxlength=\"80\"></label><label>Slug<input name=\"slug\" required pattern=\"[a-z0-9-]+\" maxlength=\"80\"></label>");
+    try writer.writeAll("<label>Git URL<input type=\"url\" name=\"git_url\" maxlength=\"512\" placeholder=\"https://github.com/org/repo\"></label>");
+    try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Add project</button></form></section>");
+}
+
 fn adminEditFormResponse(
     context: *app_state.Context,
     workspace: *request.Workspace,
@@ -639,13 +817,16 @@ fn adminEditFormResponse(
         return context.empty(.service_unavailable);
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
     const branding = page.resolveBranding(workspace.allocator(), database, settings);
+    var projects_storage: [32]models.Project = undefined;
+    const projects = database.listProjects(workspace.allocator(), &projects_storage, true) catch
+        return context.empty(.service_unavailable);
     var action_buf: [64]u8 = undefined;
     const action = std.fmt.bufPrint(&action_buf, "/admin/issues/{d}/content", .{issue.id}) catch
         return context.empty(.internal_server_error);
     var writer = workspace.writer();
-    page.begin(&writer, branding, "Edit feedback", .admin, user) catch
+    page.begin(&writer, branding, "Edit feedback", .admin, user, page.colorScheme(context)) catch
         return context.empty(.internal_server_error);
-    page.issueEditForm(&writer, values, token.hiddenInput(), action, "/admin", error_message) catch
+    page.issueEditForm(&writer, values, projects, token.hiddenInput(), action, "/admin", error_message) catch
         return context.empty(.internal_server_error);
     page.end(&writer, workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(status, workspace.rendered(&writer));
@@ -685,6 +866,7 @@ fn optionalText(writer: *std.Io.Writer, value: ?[]const u8) !void {
 fn renderChangelogs(
     writer: *std.Io.Writer,
     entries: []const models.Changelog,
+    total: i64,
     current_page: u16,
     csrf_input: []const u8,
 ) !void {
@@ -713,7 +895,7 @@ fn renderChangelogs(
             "<a class=\"button button-quiet\" href=\"/admin?release_page={d}#changelog\">← Newer</a>",
             .{current_page - 1},
         );
-        if (entries.len == 20) try writer.print(
+        if (@as(i64, current_page) * domain.list_page_size < total) try writer.print(
             "<a class=\"button button-quiet\" href=\"/admin?release_page={d}#changelog\">Older →</a>",
             .{current_page + 1},
         );

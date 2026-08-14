@@ -19,11 +19,11 @@ transport is fully implemented.
 
 | Scope | Capability |
 | --- | --- |
-| `poof:read` | Overview, boards, feedback, roadmap, changelog |
+| `poof:read` | Overview, boards, projects, feedback, roadmap, changelog |
 | `issues:write` | Create issues and add/remove the owner’s vote |
 | `comments:write` | Add comments and one-level replies |
-| `admin:issues` | Status, priority, board, pin, lock, duplicate triage |
-| `admin:boards` | Create and archive boards |
+| `admin:issues` | Status, priority, board, project, pin, lock, duplicate triage |
+| `admin:boards` | Create and archive boards and projects |
 | `admin:changelog` | Create drafts and publish/revert changelogs |
 
 Admin scopes require the token owner to still be an administrator. Demotion
@@ -33,6 +33,7 @@ takes effect on the next request.
 
 - `poof_get_overview`
 - `poof_list_boards`
+- `poof_list_projects`
 - `poof_list_issues`
 - `poof_get_issue`
 - `poof_get_roadmap`
@@ -44,6 +45,9 @@ takes effect on the next request.
 - `poof_create_board`
 - `poof_update_board`
 - `poof_archive_board`
+- `poof_create_project`
+- `poof_update_project`
+- `poof_archive_project`
 - `poof_create_changelog`
 - `poof_update_changelog`
 - `poof_publish_changelog`

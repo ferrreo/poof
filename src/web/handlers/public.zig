@@ -13,6 +13,7 @@ const ListQuery = struct {
     page: u16 = 1,
     sort: models.IssueSort = .top,
     board_id: i64 = 0,
+    project_id: i64 = 0,
     kind: enum { all, feature, improvement, bug } = .all,
     status: enum { all, pending, reviewing, planned, in_progress, completed, closed } = .all,
     q: ?[]const u8 = null,
@@ -20,7 +21,7 @@ const ListQuery = struct {
 
 pub const ListDefinition = ploof.Endpoint(.{
     .query = ploof.Query.typed(ListQuery, .{
-        .segments_max = 8,
+        .segments_max = 10,
         .unknown_fields = .reject,
     }),
 });
@@ -39,6 +40,26 @@ pub const ChangelogDefinition = ploof.Endpoint(.{
     }),
 });
 
+const RoadmapQuery = struct {
+    planned_page: u16 = 1,
+    progress_page: u16 = 1,
+    completed_page: u16 = 1,
+};
+
+pub const RoadmapDefinition = ploof.Endpoint(.{
+    .query = ploof.Query.typed(RoadmapQuery, .{
+        .segments_max = 6,
+        .unknown_fields = .reject,
+    }),
+});
+
+pub const MeDefinition = ploof.Endpoint(.{
+    .query = ploof.Query.typed(struct { page: u16 = 1 }, .{
+        .segments_max = 2,
+        .unknown_fields = .reject,
+    }),
+});
+
 const CreateForm = struct {
     board_id: i64,
     kind: domain.IssueKind,
@@ -49,6 +70,7 @@ const CreateForm = struct {
     actual_behavior: ?[]const u8 = null,
     environment: ?[]const u8 = null,
     evidence_url: ?[]const u8 = null,
+    project_id: i64 = 0,
 };
 
 pub const CreateDefinition = ploof.Endpoint(.{
@@ -90,10 +112,11 @@ pub const EditDefinition = ploof.Endpoint(.{
         actual_behavior: ?[]const u8 = null,
         environment: ?[]const u8 = null,
         evidence_url: ?[]const u8 = null,
+        project_id: i64 = 0,
     }, .{
         .encoded_wire_bytes_max = 64 * 1024,
         .decoded_bytes_max = 64 * 1024,
-        .segments_max = 12,
+        .segments_max = 14,
         .unknown_fields = .reject,
     }),
 });
@@ -136,30 +159,9 @@ fn renderIssueList(
     var board_storage: [32]models.Board = undefined;
     const boards = database.listBoards(allocator, &board_storage, false) catch
         return context.empty(.service_unavailable);
-    var item_storage: [20]models.IssueSummary = undefined;
-    const page_number = @max(query.page, 1);
-    const result = database.listIssues(allocator, .{
-        .board_id = if (query.board_id > 0) query.board_id else null,
-        .kind = switch (query.kind) {
-            .all => null,
-            .feature => .feature,
-            .improvement => .improvement,
-            .bug => .bug,
-        },
-        .status = switch (query.status) {
-            .all => null,
-            .pending => .pending,
-            .reviewing => .reviewing,
-            .planned => .planned,
-            .in_progress => .in_progress,
-            .completed => .completed,
-            .closed => .closed,
-        },
-        .query = query.q,
-        .sort = query.sort,
-        .limit = 20,
-        .offset = (@as(u32, page_number) - 1) * 20,
-    }, &item_storage) catch return context.empty(.service_unavailable);
+    var project_storage: [32]models.Project = undefined;
+    const projects = database.listProjects(allocator, &project_storage, false) catch
+        return context.empty(.service_unavailable);
 
     const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
@@ -169,15 +171,27 @@ fn renderIssueList(
         "Feedback",
         .feedback,
         if (current) |*value| &value.user else null,
+        page.colorScheme(context),
     ) catch return context.empty(.internal_server_error);
     if (show_hero) renderHero(&writer, branding) catch
         return context.empty(.internal_server_error);
-    renderFilters(&writer, boards, query) catch
+    renderFilters(&writer, boards, projects, query) catch
         return context.empty(.internal_server_error);
-    renderIssueCards(&writer, result.items, result.total) catch
-        return context.empty(.internal_server_error);
-    renderPager(&writer, query, result.total) catch
-        return context.empty(.internal_server_error);
+    if (query.status == .all) {
+        renderGroupedIssues(&writer, database, allocator, query) catch
+            return context.empty(.service_unavailable);
+    } else {
+        var item_storage: [domain.list_page_size]models.IssueSummary = undefined;
+        const page_number = @max(query.page, 1);
+        const result = database.listIssues(allocator, listFilter(query, .{
+            .limit = domain.list_page_size,
+            .offset = (@as(u32, page_number) - 1) * domain.list_page_size,
+        }), &item_storage) catch return context.empty(.service_unavailable);
+        renderIssueCards(&writer, result.items, result.total) catch
+            return context.empty(.internal_server_error);
+        renderPager(&writer, query, result.total) catch
+            return context.empty(.internal_server_error);
+    }
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
     page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
@@ -236,6 +250,7 @@ pub fn detail(
         issue.title,
         .feedback,
         if (current) |*value| &value.user else null,
+        page.colorScheme(context),
     ) catch return context.empty(.internal_server_error);
     writer.writeAll("<article class=\"issue-detail\"><header class=\"issue-detail-header\">") catch
         return context.empty(.internal_server_error);
@@ -243,6 +258,22 @@ pub fn detail(
         return context.empty(.internal_server_error);
     highlight.escapeHtml(&writer, issue.board_name) catch
         return context.empty(.internal_server_error);
+    if (issue.project_name) |project_name| {
+        writer.writeAll(" · ") catch return context.empty(.internal_server_error);
+        if (issue.project_git_url) |git_url| {
+            writer.writeAll("<a class=\"text-link\" rel=\"nofollow noopener\" href=\"") catch
+                return context.empty(.internal_server_error);
+            highlight.escapeHtml(&writer, git_url) catch
+                return context.empty(.internal_server_error);
+            writer.writeAll("\">") catch return context.empty(.internal_server_error);
+            highlight.escapeHtml(&writer, project_name) catch
+                return context.empty(.internal_server_error);
+            writer.writeAll("</a>") catch return context.empty(.internal_server_error);
+        } else {
+            highlight.escapeHtml(&writer, project_name) catch
+                return context.empty(.internal_server_error);
+        }
+    }
     writer.print(" · #{d}</p><h1>", .{issue.id}) catch
         return context.empty(.internal_server_error);
     highlight.escapeHtml(&writer, issue.title) catch
@@ -370,6 +401,7 @@ pub fn create(
         .actual_behavior = nonEmpty(form.actual_behavior),
         .environment = nonEmpty(form.environment),
         .evidence_url = nonEmpty(form.evidence_url),
+        .project_id = if (form.project_id > 0) form.project_id else null,
     };
     if (!(database.allowUserAction(
         current.user.id,
@@ -414,7 +446,7 @@ pub fn create(
                 &workspace,
                 &current.user,
                 form,
-                "Could not save this feedback. Check the board and try again.",
+                "Could not save this feedback. Check the board and project, then try again.",
                 .unprocessable_entity,
             ),
             else => issueFormResponse(
@@ -502,6 +534,7 @@ pub fn editIssueContent(
         .actual_behavior = nonEmpty(form.actual_behavior),
         .environment = nonEmpty(form.environment),
         .evidence_url = nonEmpty(form.evidence_url),
+        .project_id = form.project_id,
     };
     if (!(database.allowUserAction(
         current.user.id,
@@ -529,6 +562,7 @@ pub fn editIssueContent(
         .actual_behavior = values.actual_behavior,
         .environment = values.environment,
         .evidence_url = values.evidence_url,
+        .project_id = if (values.project_id > 0) values.project_id else null,
     };
     domain.validateCreateIssue(payload) catch |err| {
         return editFormResponse(
@@ -549,6 +583,7 @@ pub fn editIssueContent(
         .actual_behavior = values.actual_behavior,
         .environment = values.environment,
         .evidence_url = values.evidence_url,
+        .project_id = if (values.project_id > 0) values.project_id else null,
     }) catch |problem| return switch (problem) {
         error.Forbidden => page.htmlFailure(
             context,
@@ -669,7 +704,10 @@ pub fn comment(
     return redirectToIssue(context, database, workspace.allocator(), issue_id, value);
 }
 
-pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
+pub fn me(
+    context: *app_state.Context,
+    input: MeDefinition.InputType,
+) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.empty(.service_unavailable);
     const database = app_state.database(context) orelse
@@ -680,17 +718,20 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
     const current = (request.principal(context, allocator) catch
         return context.empty(.service_unavailable)) orelse
         return request.redirect(context, .see_other, "/auth/discord?return_to=/me");
-    var issue_storage: [100]models.IssueSummary = undefined;
+    const page_number = @max(input.query.page, 1);
+    var issue_storage: [domain.list_page_size]models.IssueSummary = undefined;
     const issues = database.listUserIssues(
         allocator,
         current.user.id,
+        domain.list_page_size,
+        (@as(u32, page_number) - 1) * domain.list_page_size,
         &issue_storage,
     ) catch return context.empty(.service_unavailable);
     const csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
     const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, branding, "My activity", .none, &current.user) catch
+    page.begin(&writer, branding, "My activity", .none, &current.user, page.colorScheme(context)) catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"profile-page\"><header><h1>") catch
         return context.empty(.internal_server_error);
@@ -707,15 +748,28 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
     writer.writeAll(csrf_token.hiddenInput()) catch return context.empty(.internal_server_error);
     writer.writeAll("<button class=\"button button-quiet\" type=\"submit\">Sign out</button></form></div></header>") catch
         return context.empty(.internal_server_error);
-    if (issues.len == 0) {
+    if (issues.items.len == 0) {
         writer.writeAll("<div class=\"empty-card\"><h2>No activity yet.</h2><p>File or vote on an item to see it here.</p></div>") catch
             return context.empty(.internal_server_error);
     } else {
         writer.writeAll("<div class=\"issue-list\">") catch
             return context.empty(.internal_server_error);
-        for (issues) |issue| renderIssueCard(&writer, issue) catch
+        for (issues.items) |issue| renderIssueCard(&writer, issue) catch
             return context.empty(.internal_server_error);
         writer.writeAll("</div>") catch return context.empty(.internal_server_error);
+        if (page_number > 1 or issues.total > domain.list_page_size) {
+            writer.writeAll("<nav class=\"pagination\" aria-label=\"Activity pages\">") catch
+                return context.empty(.internal_server_error);
+            if (page_number > 1) writer.print(
+                "<a class=\"button button-quiet\" href=\"/me?page={d}\">← Previous</a>",
+                .{page_number - 1},
+            ) catch return context.empty(.internal_server_error);
+            if (@as(i64, page_number) * domain.list_page_size < issues.total) writer.print(
+                "<a class=\"button button-quiet\" href=\"/me?page={d}\">Next →</a>",
+                .{page_number + 1},
+            ) catch return context.empty(.internal_server_error);
+            writer.writeAll("</nav>") catch return context.empty(.internal_server_error);
+        }
     }
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
     page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
@@ -724,7 +778,10 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
     return response;
 }
 
-pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
+pub fn roadmap(
+    context: *app_state.Context,
+    input: RoadmapDefinition.InputType,
+) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
     const database = app_state.database(context) orelse
@@ -734,21 +791,28 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
     const allocator = workspace.allocator();
     const current = request.principal(context, allocator) catch
         return context.empty(.service_unavailable);
-    var planned_storage: [20]models.IssueSummary = undefined;
-    var progress_storage: [20]models.IssueSummary = undefined;
-    var completed_storage: [20]models.IssueSummary = undefined;
+    const query = input.query;
+    const planned_page = @max(query.planned_page, 1);
+    const progress_page = @max(query.progress_page, 1);
+    const completed_page = @max(query.completed_page, 1);
+    var planned_storage: [domain.list_page_size]models.IssueSummary = undefined;
+    var progress_storage: [domain.list_page_size]models.IssueSummary = undefined;
+    var completed_storage: [domain.list_page_size]models.IssueSummary = undefined;
     const planned = database.listIssues(allocator, .{
         .status = .planned,
-        .limit = 20,
+        .limit = domain.list_page_size,
+        .offset = (@as(u32, planned_page) - 1) * domain.list_page_size,
     }, &planned_storage) catch return context.empty(.service_unavailable);
     const progress = database.listIssues(allocator, .{
         .status = .in_progress,
-        .limit = 20,
+        .limit = domain.list_page_size,
+        .offset = (@as(u32, progress_page) - 1) * domain.list_page_size,
     }, &progress_storage) catch return context.empty(.service_unavailable);
     const completed = database.listIssues(allocator, .{
         .status = .completed,
         .completed_since_days = 90,
-        .limit = 20,
+        .limit = domain.list_page_size,
+        .offset = (@as(u32, completed_page) - 1) * domain.list_page_size,
     }, &completed_storage) catch return context.empty(.service_unavailable);
 
     const branding = page.resolveBranding(allocator, database, settings);
@@ -759,6 +823,7 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
         "Roadmap",
         .roadmap,
         if (current) |*value| &value.user else null,
+        page.colorScheme(context),
     ) catch return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"page-heading\">") catch
         return context.empty(.internal_server_error);
@@ -766,11 +831,11 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"roadmap-grid\">") catch
         return context.empty(.internal_server_error);
-    renderRoadmapColumn(&writer, "Planned", planned) catch
+    renderRoadmapColumn(&writer, "Planned", planned, query, .planned, planned_page) catch
         return context.empty(.internal_server_error);
-    renderRoadmapColumn(&writer, "In progress", progress) catch
+    renderRoadmapColumn(&writer, "In progress", progress, query, .progress, progress_page) catch
         return context.empty(.internal_server_error);
-    renderRoadmapColumn(&writer, "Recently completed", completed) catch
+    renderRoadmapColumn(&writer, "Recently completed", completed, query, .completed, completed_page) catch
         return context.empty(.internal_server_error);
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
     page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
@@ -790,14 +855,16 @@ pub fn changelog(
     const allocator = workspace.allocator();
     const current = request.principal(context, allocator) catch null;
     const changelog_page = @max(input.query.page, 1);
-    var changelog_storage: [20]models.Changelog = undefined;
+    var changelog_storage: [domain.list_page_size]models.Changelog = undefined;
     const entries = database.listChangelogsPage(
         allocator,
         true,
-        20,
-        (@as(u32, changelog_page) - 1) * 20,
+        domain.list_page_size,
+        (@as(u32, changelog_page) - 1) * domain.list_page_size,
         &changelog_storage,
     ) catch return context.empty(.service_unavailable);
+    const changelog_total = database.countChangelogs(true) catch
+        return context.empty(.service_unavailable);
     const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
     page.begin(
@@ -806,6 +873,7 @@ pub fn changelog(
         "Changelog",
         .changelog,
         if (current) |*value| &value.user else null,
+        page.colorScheme(context),
     ) catch return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"page-heading\">") catch
         return context.empty(.internal_server_error);
@@ -825,7 +893,7 @@ pub fn changelog(
             "<a class=\"button button-quiet\" href=\"/changelog?page={d}\">← Newer</a>",
             .{changelog_page - 1},
         ) catch return context.empty(.internal_server_error);
-        if (entries.len == 20) writer.print(
+        if (@as(i64, changelog_page) * domain.list_page_size < changelog_total) writer.print(
             "<a class=\"button button-quiet\" href=\"/changelog?page={d}\">Older →</a>",
             .{changelog_page + 1},
         ) catch return context.empty(.internal_server_error);
@@ -863,6 +931,7 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
         entry.title,
         .changelog,
         if (current) |*value| &value.user else null,
+        page.colorScheme(context),
     ) catch return context.empty(.internal_server_error);
     writer.writeAll("<article class=\"changelog-detail\"><header><p class=\"kicker\">") catch
         return context.empty(.internal_server_error);
@@ -922,7 +991,12 @@ fn renderChangelogCard(writer: *std.Io.Writer, entry: models.Changelog) !void {
     try writer.writeAll("</span></article>");
 }
 
-fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: ListQuery) !void {
+fn renderFilters(
+    writer: *std.Io.Writer,
+    boards: []const models.Board,
+    projects: []const models.Project,
+    query: ListQuery,
+) !void {
     try writer.writeAll("<section class=\"feedback-shell\"><div class=\"section-heading\">");
     try writer.writeAll("<h2>Feedback</h2>");
     try writer.writeAll("<form class=\"filters\" method=\"get\" action=\"/issues\">");
@@ -941,7 +1015,20 @@ fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: Li
         try highlight.escapeHtml(writer, board.name);
         try writer.writeAll("</option>");
     }
-    try writer.writeAll("</select><select name=\"kind\"><option value=\"all\">All types</option>");
+    try writer.writeAll("</select>");
+    if (projects.len != 0) {
+        try writer.writeAll("<select name=\"project_id\"><option value=\"0\">All projects</option>");
+        for (projects) |project| {
+            try writer.print("<option value=\"{d}\"{s}>", .{
+                project.id,
+                if (query.project_id == project.id) " selected" else "",
+            });
+            try highlight.escapeHtml(writer, project.name);
+            try writer.writeAll("</option>");
+        }
+        try writer.writeAll("</select>");
+    }
+    try writer.writeAll("<select name=\"kind\"><option value=\"all\">All types</option>");
     inline for (std.meta.tags(domain.IssueKind)) |kind| {
         try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
             @tagName(kind),
@@ -967,6 +1054,121 @@ fn renderFilters(writer: *std.Io.Writer, boards: []const models.Board, query: Li
     try writer.writeAll("</select><button class=\"button button-quiet\" type=\"submit\">Filter</button></form></div>");
 }
 
+const ListBounds = struct {
+    limit: u8,
+    offset: u32 = 0,
+    status: ?domain.IssueStatus = null,
+};
+
+fn listFilter(query: ListQuery, bounds: ListBounds) models.IssueFilter {
+    return .{
+        .board_id = if (query.board_id > 0) query.board_id else null,
+        .project_id = if (query.project_id > 0) query.project_id else null,
+        .kind = switch (query.kind) {
+            .all => null,
+            .feature => .feature,
+            .improvement => .improvement,
+            .bug => .bug,
+        },
+        .status = bounds.status orelse switch (query.status) {
+            .all => null,
+            .pending => .pending,
+            .reviewing => .reviewing,
+            .planned => .planned,
+            .in_progress => .in_progress,
+            .completed => .completed,
+            .closed => .closed,
+        },
+        .query = query.q,
+        .sort = query.sort,
+        .limit = bounds.limit,
+        .offset = bounds.offset,
+    };
+}
+
+fn renderGroupedIssues(
+    writer: *std.Io.Writer,
+    database: anytype,
+    allocator: std.mem.Allocator,
+    query: ListQuery,
+) !void {
+    const statuses = comptime std.meta.tags(domain.IssueStatus);
+    var storage: [domain.group_preview_size * statuses.len]models.IssueSummary = undefined;
+    var results: [statuses.len]models.ListResult = undefined;
+    inline for (statuses, 0..) |status, index| {
+        const slice = storage[index * domain.group_preview_size ..][0..domain.group_preview_size];
+        results[index] = try database.listIssues(allocator, listFilter(query, .{
+            .limit = domain.group_preview_size,
+            .status = status,
+        }), slice);
+    }
+
+    var rendered: usize = 0;
+    try writer.writeAll("<div class=\"status-groups\">");
+    for (statuses, results) |status, result| {
+        if (result.total == 0) continue;
+        if (rendered == 0) {
+            try writer.writeAll("<div class=\"group-controls\">");
+            try writer.writeAll("<button type=\"button\" class=\"button button-quiet\" data-groups=\"expand\">Expand all</button>");
+            try writer.writeAll("<button type=\"button\" class=\"button button-quiet\" data-groups=\"collapse\">Collapse all</button>");
+            try writer.writeAll("</div>");
+        }
+        rendered += 1;
+        try renderStatusGroup(writer, status, result, query);
+    }
+    if (rendered == 0) {
+        try writer.writeAll("<div class=\"empty-card\"><h3>No feedback yet.</h3>");
+        try writer.writeAll("<p>Sign in with Discord to file the first item.</p>");
+        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">New feedback</a></div>");
+    }
+    try writer.writeAll("</div>");
+}
+
+fn renderStatusGroup(
+    writer: *std.Io.Writer,
+    status: domain.IssueStatus,
+    result: models.ListResult,
+    query: ListQuery,
+) !void {
+    try writer.writeAll("<details class=\"status-group\"");
+    if (status.groupOpenByDefault()) try writer.writeAll(" open");
+    try writer.writeAll("><summary>");
+    try page.statusBadge(writer, status);
+    try writer.print("<span class=\"status-count\">{d}</span></summary>", .{result.total});
+    try writer.writeAll("<div class=\"issue-list\">");
+    for (result.items) |issue| try renderIssueCard(writer, issue);
+    try writer.writeAll("</div>");
+    if (result.total > @as(i64, @intCast(result.items.len))) {
+        try writer.writeAll("<p class=\"status-group-more\"><a class=\"text-link\" href=\"");
+        try writeIssuesHref(writer, query, @tagName(status), 1);
+        try writer.print("\">Show all {d}</a></p>", .{result.total});
+    }
+    try writer.writeAll("</details>");
+}
+
+fn writeIssuesHref(
+    writer: *std.Io.Writer,
+    query: ListQuery,
+    status: []const u8,
+    target_page: u16,
+) !void {
+    try writer.print(
+        "/issues?page={d}&sort={s}&board_id={d}&project_id={d}&kind={s}&status={s}",
+        .{
+            target_page,
+            @tagName(query.sort),
+            query.board_id,
+            query.project_id,
+            @tagName(query.kind),
+            status,
+        },
+    );
+    if (query.q) |value| {
+        try writer.writeAll("&q=");
+        try page.writeQueryComponent(writer, value);
+    }
+}
+
 fn renderIssueCards(writer: *std.Io.Writer, items: []const models.IssueSummary, total: i64) !void {
     if (items.len == 0) {
         try writer.writeAll("<div class=\"empty-card\"><h3>No feedback yet.</h3>");
@@ -981,10 +1183,10 @@ fn renderIssueCards(writer: *std.Io.Writer, items: []const models.IssueSummary, 
 
 fn renderPager(writer: *std.Io.Writer, query: ListQuery, total: i64) !void {
     const current = @max(query.page, 1);
-    if (current == 1 and total <= 20) return;
+    if (current == 1 and total <= domain.list_page_size) return;
     try writer.writeAll("<nav class=\"pagination\" aria-label=\"Feedback pages\">");
     if (current > 1) try renderPageForm(writer, query, current - 1, "← Previous");
-    if (@as(i64, current) * 20 < total) try renderPageForm(writer, query, current + 1, "Next →");
+    if (@as(i64, current) * domain.list_page_size < total) try renderPageForm(writer, query, current + 1, "Next →");
     try writer.writeAll("</nav>");
 }
 
@@ -998,6 +1200,7 @@ fn renderPageForm(
     try writer.print("<input type=\"hidden\" name=\"page\" value=\"{d}\">", .{target_page});
     try writer.print("<input type=\"hidden\" name=\"sort\" value=\"{s}\">", .{@tagName(query.sort)});
     try writer.print("<input type=\"hidden\" name=\"board_id\" value=\"{d}\">", .{query.board_id});
+    try writer.print("<input type=\"hidden\" name=\"project_id\" value=\"{d}\">", .{query.project_id});
     try writer.print("<input type=\"hidden\" name=\"kind\" value=\"{s}\">", .{@tagName(query.kind)});
     try writer.print("<input type=\"hidden\" name=\"status\" value=\"{s}\">", .{@tagName(query.status)});
     if (query.q) |value| {
@@ -1025,6 +1228,10 @@ fn renderIssueCard(writer: *std.Io.Writer, issue: models.IssueSummary) !void {
     try highlight.escapeHtml(writer, issue.title);
     try writer.writeAll("</a></h3><p>");
     try highlight.escapeHtml(writer, issue.board_name);
+    if (issue.project_name) |project_name| {
+        try writer.writeAll(" · ");
+        try highlight.escapeHtml(writer, project_name);
+    }
     try writer.writeAll(" · by ");
     try highlight.escapeHtml(writer, issue.author_name);
     try writer.print(" · {d} comments</p></div></article>", .{issue.comment_count});
@@ -1167,6 +1374,7 @@ fn renderVoteForm(
 fn renderIssueForm(
     writer: *std.Io.Writer,
     boards: []const models.Board,
+    projects: []const models.Project,
     csrf_input: []const u8,
     values: CreateForm,
     error_message: ?[]const u8,
@@ -1194,6 +1402,7 @@ fn renderIssueForm(
         try writer.writeAll("</option>");
     }
     try writer.writeAll("</select></label></div>");
+    try page.writeProjectField(writer, projects, values.project_id);
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" placeholder=\"A concise summary\" value=\"");
     try highlight.escapeHtml(writer, values.title);
     try writer.writeAll("\"></label>");
@@ -1257,6 +1466,7 @@ fn emptyCreateForm() CreateForm {
 fn createIssueErrorMessage(err: domain.ValidationError) []const u8 {
     return switch (err) {
         error.InvalidBoard => "Pick a board.",
+        error.InvalidProject => "Pick a listed project, or leave it empty.",
         error.InvalidTitle => "Title needs 5–160 characters.",
         error.InvalidBody => "Description needs at least 20 characters.",
         error.MissingBugDetails => "Bug reports need reproduction steps and what actually happened (at least 10 characters each).",
@@ -1281,13 +1491,16 @@ fn issueFormResponse(
     var boards_storage: [32]models.Board = undefined;
     const boards = database.listBoards(workspace.allocator(), &boards_storage, false) catch
         return context.empty(.service_unavailable);
+    var projects_storage: [32]models.Project = undefined;
+    const projects = database.listProjects(workspace.allocator(), &projects_storage, false) catch
+        return context.empty(.service_unavailable);
     var csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
     const branding = page.resolveBranding(workspace.allocator(), database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, branding, "Share feedback", .feedback, user) catch
+    page.begin(&writer, branding, "Share feedback", .feedback, user, page.colorScheme(context)) catch
         return context.empty(.internal_server_error);
-    renderIssueForm(&writer, boards, csrf_token.hiddenInput(), values, error_message) catch
+    renderIssueForm(&writer, boards, projects, csrf_token.hiddenInput(), values, error_message) catch
         return context.empty(.internal_server_error);
     page.end(&writer, workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(status, workspace.rendered(&writer));
@@ -1311,6 +1524,9 @@ fn editFormResponse(
     var csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
     const branding = page.resolveBranding(workspace.allocator(), database, settings);
+    var projects_storage: [32]models.Project = undefined;
+    const projects = database.listProjects(workspace.allocator(), &projects_storage, true) catch
+        return context.empty(.service_unavailable);
     var action_buf: [64]u8 = undefined;
     const action = std.fmt.bufPrint(&action_buf, "/issues/{d}/content", .{issue.id}) catch
         return context.empty(.internal_server_error);
@@ -1318,9 +1534,9 @@ fn editFormResponse(
     const cancel = page.issueUrl(&cancel_buf, issue.id, issue.slug) catch
         return context.empty(.internal_server_error);
     var writer = workspace.writer();
-    page.begin(&writer, branding, "Edit feedback", .feedback, user) catch
+    page.begin(&writer, branding, "Edit feedback", .feedback, user, page.colorScheme(context)) catch
         return context.empty(.internal_server_error);
-    page.issueEditForm(&writer, values, csrf_token.hiddenInput(), action, cancel, error_message) catch
+    page.issueEditForm(&writer, values, projects, csrf_token.hiddenInput(), action, cancel, error_message) catch
         return context.empty(.internal_server_error);
     page.end(&writer, workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(status, workspace.rendered(&writer));
@@ -1332,6 +1548,9 @@ fn renderRoadmapColumn(
     writer: *std.Io.Writer,
     title: []const u8,
     result: models.ListResult,
+    query: RoadmapQuery,
+    column: enum { planned, progress, completed },
+    page_number: u16,
 ) !void {
     try writer.writeAll("<div class=\"roadmap-column\"><header><h2>");
     try writer.writeAll(title);
@@ -1349,16 +1568,43 @@ fn renderRoadmapColumn(
             try page.priorityBadge(writer, issue.priority);
             if (issue.priority != .none) try writer.writeAll(" ");
             try highlight.escapeHtml(writer, issue.board_name);
+            if (issue.project_name) |project_name| {
+                try writer.writeAll(" · ");
+                try highlight.escapeHtml(writer, project_name);
+            }
             try writer.print(" · {d} votes</span></a>", .{issue.vote_count});
         }
-        if (result.total > @as(i64, @intCast(result.items.len))) {
-            try writer.print("<p class=\"roadmap-empty\">Showing {d} of {d} items.</p>", .{
-                result.items.len,
-                result.total,
-            });
+    }
+    if (page_number > 1 or result.total > domain.list_page_size) {
+        try writer.writeAll("<nav class=\"pagination\" aria-label=\"");
+        try writer.writeAll(title);
+        try writer.writeAll(" pages\">");
+        if (page_number > 1) {
+            try writer.writeAll("<a class=\"button button-quiet\" href=\"");
+            try writeRoadmapHref(writer, query, column, page_number - 1);
+            try writer.writeAll("\">← Previous</a>");
         }
+        if (@as(i64, page_number) * domain.list_page_size < result.total) {
+            try writer.writeAll("<a class=\"button button-quiet\" href=\"");
+            try writeRoadmapHref(writer, query, column, page_number + 1);
+            try writer.writeAll("\">Next →</a>");
+        }
+        try writer.writeAll("</nav>");
     }
     try writer.writeAll("</div>");
+}
+
+fn writeRoadmapHref(
+    writer: *std.Io.Writer,
+    query: RoadmapQuery,
+    column: enum { planned, progress, completed },
+    target_page: u16,
+) !void {
+    try writer.print("/roadmap?planned_page={d}&progress_page={d}&completed_page={d}", .{
+        if (column == .planned) target_page else @max(query.planned_page, 1),
+        if (column == .progress) target_page else @max(query.progress_page, 1),
+        if (column == .completed) target_page else @max(query.completed_page, 1),
+    });
 }
 
 fn redirectToIssue(

@@ -42,6 +42,18 @@ pub const Workspace = struct {
     }
 };
 
+pub fn cookieValue(context: *app_state.Context, name: []const u8) ?[]const u8 {
+    var values: [8][]const u8 = undefined;
+    var count: usize = 0;
+    var iterator = context.request.headers.all("cookie").iterator();
+    while (iterator.next()) |value| {
+        if (count == values.len) return null;
+        values[count] = value;
+        count += 1;
+    }
+    return cookie.find(values[0..count], name) catch null;
+}
+
 pub fn principal(
     context: *app_state.Context,
     allocator: std.mem.Allocator,

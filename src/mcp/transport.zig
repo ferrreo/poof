@@ -259,10 +259,12 @@ fn callTool(
         const issues = try database.listIssues(allocator, .{ .limit = 1 }, &items);
         var boards_storage: [32]models.Board = undefined;
         const boards = try database.listBoards(allocator, &boards_storage, false);
+        var projects_storage: [32]models.Project = undefined;
+        const projects = try database.listProjects(allocator, &projects_storage, false);
         try protocol.writeToolText(writer, "Poof overview loaded.");
         try writer.print(
-            ",\"structuredContent\":{{\"issues\":{d},\"boards\":{d}}}}}",
-            .{ issues.total, boards.len },
+            ",\"structuredContent\":{{\"issues\":{d},\"boards\":{d},\"projects\":{d}}}}}",
+            .{ issues.total, boards.len, projects.len },
         );
         return;
     }
@@ -283,8 +285,26 @@ fn callTool(
         try writer.writeAll("]}}");
         return;
     }
+    if (std.mem.eql(u8, name, "poof_list_projects")) {
+        try requireFields(arguments, &.{});
+        var storage: [32]models.Project = undefined;
+        const projects = try database.listProjects(allocator, &storage, false);
+        try protocol.writeToolText(writer, "Active projects loaded.");
+        try writer.writeAll(",\"structuredContent\":{\"projects\":[");
+        for (projects, 0..) |project, index| {
+            if (index != 0) try writer.writeByte(',');
+            try writer.print("{{\"id\":{d},\"slug\":", .{project.id});
+            try protocol.writeJsonString(writer, project.slug);
+            try writer.writeAll(",\"name\":");
+            try protocol.writeJsonString(writer, project.name);
+            try writeOptionalStringField(writer, "git_url", project.git_url);
+            try writer.writeByte('}');
+        }
+        try writer.writeAll("]}}");
+        return;
+    }
     if (std.mem.eql(u8, name, "poof_list_issues")) {
-        try requireFields(arguments, &.{ "query", "status", "kind", "limit", "offset" });
+        try requireFields(arguments, &.{ "query", "status", "kind", "project_id", "limit", "offset" });
         const status = if (protocol.string(arguments, "status")) |value|
             try parseStatus(value)
         else
@@ -301,6 +321,7 @@ fn callTool(
         const result = try database.listIssues(allocator, .{
             .status = status,
             .kind = kind,
+            .project_id = try optionalPositiveId(arguments, "project_id"),
             .query = protocol.string(arguments, "query"),
             .limit = @intCast(limit_value),
             .offset = @intCast(offset_value),
@@ -431,10 +452,12 @@ fn callTool(
         try requireFields(arguments, &.{
             "idempotency_key",    "board_id",          "kind",            "title",       "body",
             "reproduction_steps", "expected_behavior", "actual_behavior", "environment", "evidence_url",
+            "project_id",
         });
         _ = try idempotencyKey(arguments);
         const issue_id = try database.createIssue(principal.owner.id, .{
             .board_id = try positiveId(arguments, "board_id"),
+            .project_id = try optionalPositiveId(arguments, "project_id"),
             .kind = try parseKind(protocol.string(arguments, "kind") orelse
                 return error.InvalidArguments),
             .title = protocol.string(arguments, "title") orelse
@@ -477,11 +500,15 @@ fn callTool(
     }
     if (std.mem.eql(u8, name, "poof_update_issue")) {
         try requireFields(arguments, &.{
-            "idempotency_key", "issue_id", "status",          "priority", "board_id",
-            "pinned",          "locked",   "duplicate_of_id",
+            "idempotency_key", "issue_id", "status",          "priority",   "board_id",
+            "pinned",          "locked",   "duplicate_of_id", "project_id",
         });
         _ = try idempotencyKey(arguments);
         const issue_id = try positiveId(arguments, "issue_id");
+        const project_id = if (protocol.field(arguments, "project_id") == null)
+            (try database.getIssue(allocator, issue_id)).project_id
+        else
+            try optionalPositiveId(arguments, "project_id");
         try database.adminUpdateIssue(issue_id, principal.owner.id, .{
             .status = try parseStatus(protocol.string(arguments, "status") orelse
                 return error.InvalidArguments),
@@ -493,6 +520,7 @@ fn callTool(
             .locked = protocol.boolean(arguments, "locked") orelse
                 return error.InvalidArguments,
             .duplicate_of_id = protocol.integer(arguments, "duplicate_of_id"),
+            .project_id = project_id,
         });
         try protocol.writeToolText(writer, "Issue updated.");
         try writer.writeAll("}");
@@ -542,6 +570,50 @@ fn callTool(
             @intCast(sort_order),
         );
         try protocol.writeToolText(writer, "Board updated.");
+        try writer.writeAll("}");
+        return;
+    }
+    if (std.mem.eql(u8, name, "poof_create_project")) {
+        try requireFields(arguments, &.{
+            "idempotency_key", "name", "slug", "git_url",
+        });
+        _ = try idempotencyKey(arguments);
+        const project_id = try database.createProject(
+            protocol.string(arguments, "name") orelse return error.InvalidArguments,
+            protocol.string(arguments, "slug") orelse return error.InvalidArguments,
+            protocol.string(arguments, "git_url"),
+        );
+        try protocol.writeToolText(writer, "Project created.");
+        try writer.print(",\"structuredContent\":{{\"project_id\":{d}}}}}", .{project_id});
+        return;
+    }
+    if (std.mem.eql(u8, name, "poof_archive_project")) {
+        try requireFields(arguments, &.{ "idempotency_key", "project_id", "confirm" });
+        _ = try idempotencyKey(arguments);
+        if (protocol.boolean(arguments, "confirm") != true) {
+            return error.ConfirmationRequired;
+        }
+        try database.archiveProject(try positiveId(arguments, "project_id"));
+        try protocol.writeToolText(writer, "Project archived.");
+        try writer.writeAll("}");
+        return;
+    }
+    if (std.mem.eql(u8, name, "poof_update_project")) {
+        try requireFields(arguments, &.{
+            "idempotency_key", "project_id", "name", "slug", "git_url", "sort_order",
+        });
+        _ = try idempotencyKey(arguments);
+        const sort_order = protocol.integer(arguments, "sort_order") orelse
+            return error.InvalidArguments;
+        if (sort_order < 0 or sort_order > 10_000) return error.InvalidArguments;
+        try database.updateProject(
+            try positiveId(arguments, "project_id"),
+            protocol.string(arguments, "name") orelse return error.InvalidArguments,
+            protocol.string(arguments, "slug") orelse return error.InvalidArguments,
+            protocol.string(arguments, "git_url"),
+            @intCast(sort_order),
+        );
+        try protocol.writeToolText(writer, "Project updated.");
         try writer.writeAll("}");
         return;
     }
@@ -736,6 +808,14 @@ fn positiveId(arguments: *const protocol.Value, name: []const u8) !i64 {
     return if (value > 0) value else error.InvalidArguments;
 }
 
+fn optionalPositiveId(arguments: *const protocol.Value, name: []const u8) !?i64 {
+    const value = protocol.field(arguments, name) orelse return null;
+    return switch (value.*) {
+        .null => null,
+        else => try positiveId(arguments, name),
+    };
+}
+
 fn idempotencyKey(arguments: *const protocol.Value) ![]const u8 {
     const value = protocol.string(arguments, "idempotency_key") orelse
         return error.InvalidArguments;
@@ -786,9 +866,11 @@ fn writeIssueSummary(writer: *std.Io.Writer, issue: models.IssueSummary) !void {
     try writer.writeAll(",\"kind\":");
     try protocol.writeJsonString(writer, @tagName(issue.kind));
     try writer.print(
-        ",\"votes\":{d},\"comments\":{d}}}",
+        ",\"votes\":{d},\"comments\":{d}",
         .{ issue.vote_count, issue.comment_count },
     );
+    try writeOptionalStringField(writer, "project", issue.project_name);
+    try writer.writeAll("}");
 }
 
 fn writeIssue(writer: *std.Io.Writer, issue: models.Issue) !void {
@@ -818,6 +900,14 @@ fn writeIssue(writer: *std.Io.Writer, issue: models.Issue) !void {
     try writeOptionalStringField(writer, "actual_behavior", issue.actual_behavior);
     try writeOptionalStringField(writer, "environment", issue.environment);
     try writeOptionalStringField(writer, "evidence_url", issue.evidence_url);
+    try writer.writeAll(",\"project_id\":");
+    if (issue.project_id) |project_id| {
+        try writer.print("{d}", .{project_id});
+    } else {
+        try writer.writeAll("null");
+    }
+    try writeOptionalStringField(writer, "project", issue.project_name);
+    try writeOptionalStringField(writer, "git_url", issue.project_git_url);
     try writer.writeAll(",\"duplicate_of_id\":");
     if (issue.duplicate_of_id) |target| {
         try writer.print("{d}", .{target});

@@ -6,6 +6,8 @@ pub const comment_body_bytes_max = 4 * 1024;
 pub const diagnostic_bytes_max = 8 * 1024;
 pub const evidence_url_bytes_max = 512;
 pub const page_size_max = 50;
+pub const list_page_size: u8 = 20;
+pub const group_preview_size: u8 = 8;
 
 pub const Role = enum {
     member,
@@ -49,6 +51,13 @@ pub const IssueStatus = enum {
         return switch (self) {
             .planned, .in_progress, .completed => true,
             .pending, .reviewing, .closed => false,
+        };
+    }
+
+    pub fn groupOpenByDefault(self: IssueStatus) bool {
+        return switch (self) {
+            .pending, .reviewing, .planned, .in_progress => true,
+            .completed, .closed => false,
         };
     }
 };
@@ -148,10 +157,12 @@ pub const CreateIssue = struct {
     actual_behavior: ?[]const u8 = null,
     environment: ?[]const u8 = null,
     evidence_url: ?[]const u8 = null,
+    project_id: ?i64 = null,
 };
 
 pub const ValidationError = error{
     InvalidBoard,
+    InvalidProject,
     InvalidTitle,
     InvalidBody,
     MissingBugDetails,
@@ -162,6 +173,7 @@ pub const ValidationError = error{
 
 pub fn validateCreateIssue(input: CreateIssue) ValidationError!void {
     if (input.board_id <= 0) return error.InvalidBoard;
+    if (input.project_id) |project_id| if (project_id <= 0) return error.InvalidProject;
     try validateText(input.title, 5, title_bytes_max, error.InvalidTitle);
     try validateText(input.body, 20, issue_body_bytes_max, error.InvalidBody);
 
@@ -237,6 +249,11 @@ pub fn validateEvidenceUrl(value: []const u8) ValidationError!void {
     }
 }
 
+pub fn validateGitUrl(value: []const u8) ValidationError!void {
+    try validateEvidenceUrl(value);
+    if (std.mem.startsWith(u8, value, "/media/")) return error.InvalidEvidenceUrl;
+}
+
 pub fn slugify(input: []const u8, output: []u8) error{NoSpaceLeft}![]const u8 {
     var used: usize = 0;
     var pending_dash = false;
@@ -271,6 +288,9 @@ test "roadmap statuses are explicit" {
     try std.testing.expect(IssueStatus.completed.appearsOnRoadmap());
     try std.testing.expect(!IssueStatus.pending.appearsOnRoadmap());
     try std.testing.expect(!IssueStatus.closed.appearsOnRoadmap());
+    try std.testing.expect(IssueStatus.pending.groupOpenByDefault());
+    try std.testing.expect(!IssueStatus.completed.groupOpenByDefault());
+    try std.testing.expect(!IssueStatus.closed.groupOpenByDefault());
     try std.testing.expectEqualStrings("Urgent", Priority.urgent.label());
 }
 
@@ -322,6 +342,12 @@ test "evidence URLs reject executable and credential-bearing locations" {
     try validateCreateIssue(input);
 }
 
+test "git URLs reject media paths and executable schemes" {
+    try std.testing.expectError(error.InvalidEvidenceUrl, validateGitUrl("/media/deadbeef.png"));
+    try std.testing.expectError(error.InvalidEvidenceUrl, validateGitUrl("javascript:alert(1)"));
+    try validateGitUrl("https://github.com/PikaOS-Linux/welcome");
+}
+
 test "authors and admins can edit issues" {
     try std.testing.expect(canEditIssue(.admin, 9, 3));
     try std.testing.expect(canEditIssue(.member, 3, 3));
@@ -335,4 +361,17 @@ test "slugify produces stable URL components" {
         try slugify("  Save drafts — faster! ", &output),
     );
     try std.testing.expectEqualStrings("issue", try slugify("✨", &output));
+}
+
+test "create issue rejects a non-positive project id" {
+    var input = CreateIssue{
+        .board_id = 1,
+        .kind = .feature,
+        .title = "Add an export button",
+        .body = "A JSON export would make backups easier for self-hosters.",
+        .project_id = 0,
+    };
+    try std.testing.expectError(error.InvalidProject, validateCreateIssue(input));
+    input.project_id = 4;
+    try validateCreateIssue(input);
 }

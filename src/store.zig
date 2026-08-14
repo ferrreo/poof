@@ -70,6 +70,15 @@ pub const Board = struct {
     archived: bool,
 };
 
+pub const Project = struct {
+    id: i64,
+    slug: []const u8,
+    name: []const u8,
+    git_url: ?[]const u8,
+    sort_order: i32,
+    archived: bool,
+};
+
 pub const Issue = struct {
     id: i64,
     slug: []const u8,
@@ -94,6 +103,9 @@ pub const Issue = struct {
     comment_count: i64,
     created_at_us: i64,
     updated_at_us: i64,
+    project_id: ?i64 = null,
+    project_name: ?[]const u8 = null,
+    project_git_url: ?[]const u8 = null,
 };
 
 pub const IssueSummary = struct {
@@ -112,6 +124,8 @@ pub const IssueSummary = struct {
     vote_count: i64,
     comment_count: i64,
     created_at_us: i64,
+    project_id: ?i64 = null,
+    project_name: ?[]const u8 = null,
 };
 
 pub const IssueSort = enum {
@@ -121,6 +135,7 @@ pub const IssueSort = enum {
 
 pub const IssueFilter = struct {
     board_id: ?i64 = null,
+    project_id: ?i64 = null,
     kind: ?domain.IssueKind = null,
     status: ?domain.IssueStatus = null,
     query: ?[]const u8 = null,
@@ -179,6 +194,7 @@ pub const AdminIssueUpdate = struct {
     pinned: bool,
     locked: bool,
     duplicate_of_id: ?i64 = null,
+    project_id: ?i64 = null,
 };
 
 pub const IssueContentUpdate = struct {
@@ -189,6 +205,7 @@ pub const IssueContentUpdate = struct {
     actual_behavior: ?[]const u8 = null,
     environment: ?[]const u8 = null,
     evidence_url: ?[]const u8 = null,
+    project_id: ?i64 = null,
 };
 
 pub const Error = error{

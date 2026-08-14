@@ -1,17 +1,18 @@
 :root {
-  --color-paper: oklch(97.5% 0.015 96);
-  --color-paper-2: oklch(95.5% 0.018 96);
-  --color-paper-3: oklch(93% 0.022 96);
-  --color-rule: oklch(82% 0.014 96);
-  --color-rule-2: oklch(68% 0.016 96);
-  --color-muted: oklch(52% 0.014 96);
-  --color-neutral: oklch(38% 0.013 96);
-  --color-ink-2: oklch(32% 0.012 96);
-  --color-ink: oklch(26% 0.012 96);
-  --color-accent: oklch(90.2% 0.173 96.7);
-  --color-accent-ink: oklch(42% 0.12 96);
-  --color-focus: oklch(72% 0.16 96.7);
-  --color-code-paper: oklch(22% 0.012 96);
+  color-scheme: light dark;
+  --color-paper: light-dark(oklch(97.5% 0.015 96), oklch(16% 0.012 96));
+  --color-paper-2: light-dark(oklch(95.5% 0.018 96), oklch(20% 0.014 96));
+  --color-paper-3: light-dark(oklch(93% 0.022 96), oklch(24% 0.016 96));
+  --color-rule: light-dark(oklch(82% 0.014 96), oklch(34% 0.014 96));
+  --color-rule-2: light-dark(oklch(68% 0.016 96), oklch(48% 0.016 96));
+  --color-muted: light-dark(oklch(52% 0.014 96), oklch(72% 0.014 96));
+  --color-neutral: light-dark(oklch(38% 0.013 96), oklch(78% 0.012 96));
+  --color-ink-2: light-dark(oklch(32% 0.012 96), oklch(88% 0.012 96));
+  --color-ink: light-dark(oklch(26% 0.012 96), oklch(94% 0.012 96));
+  --color-accent: light-dark(oklch(90.2% 0.173 96.7), oklch(84% 0.145 96.7));
+  --color-accent-ink: light-dark(oklch(42% 0.12 96), oklch(86% 0.11 96));
+  --color-focus: light-dark(oklch(72% 0.16 96.7), oklch(78% 0.14 96.7));
+  --color-code-paper: light-dark(oklch(22% 0.012 96), oklch(12% 0.012 96));
   --color-code-ink: oklch(94% 0.02 96);
 
   --font-display: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;

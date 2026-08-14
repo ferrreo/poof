@@ -10,7 +10,7 @@ the exact same domain rules.
 ## Highlights
 
 - **Feedback and issue reporting** — feature, improvement, and structured bug
-  forms with voting, Markdown, comments, replies, boards, priorities, duplicate
+  forms with voting, Markdown, comments, replies, boards, projects, priorities, duplicate
   tracking, and locking.
 - **Automatic public roadmap** — Planned, In Progress, and recently Completed
   columns are queries over the issue tracker, never a second stale data source.

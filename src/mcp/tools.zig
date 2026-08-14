@@ -24,11 +24,17 @@ pub const all = [_]Tool{
         .schema = empty_schema,
     },
     .{
+        .name = "poof_list_projects",
+        .description = "List active projects and their git repository URLs.",
+        .scope = .read,
+        .schema = empty_schema,
+    },
+    .{
         .name = "poof_list_issues",
         .description = "Search and filter feedback with bounded pagination.",
         .scope = .read,
         .schema =
-        \\{"type":"object","properties":{"query":{"type":"string","maxLength":200},"status":{"type":"string","enum":["pending","reviewing","planned","in_progress","completed","closed"]},"kind":{"type":"string","enum":["feature","improvement","bug"]},"limit":{"type":"integer","minimum":1,"maximum":50},"offset":{"type":"integer","minimum":0,"maximum":1000000}},"additionalProperties":false}
+        \\{"type":"object","properties":{"query":{"type":"string","maxLength":200},"status":{"type":"string","enum":["pending","reviewing","planned","in_progress","completed","closed"]},"kind":{"type":"string","enum":["feature","improvement","bug"]},"project_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":50},"offset":{"type":"integer","minimum":0,"maximum":1000000}},"additionalProperties":false}
         ,
     },
     .{
@@ -56,7 +62,7 @@ pub const all = [_]Tool{
         .description = "Create a feature, improvement, or structured bug report.",
         .scope = .issues_write,
         .schema =
-        \\{"type":"object","required":["idempotency_key","board_id","kind","title","body"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"board_id":{"type":"integer","minimum":1},"kind":{"type":"string","enum":["feature","improvement","bug"]},"title":{"type":"string","minLength":5,"maxLength":160},"body":{"type":"string","minLength":20,"maxLength":16384},"reproduction_steps":{"type":"string","maxLength":8192},"expected_behavior":{"type":"string","maxLength":8192},"actual_behavior":{"type":"string","maxLength":8192},"environment":{"type":"string","maxLength":8192},"evidence_url":{"type":"string","maxLength":512}},"additionalProperties":false}
+        \\{"type":"object","required":["idempotency_key","board_id","kind","title","body"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"board_id":{"type":"integer","minimum":1},"project_id":{"type":"integer","minimum":1},"kind":{"type":"string","enum":["feature","improvement","bug"]},"title":{"type":"string","minLength":5,"maxLength":160},"body":{"type":"string","minLength":20,"maxLength":16384},"reproduction_steps":{"type":"string","maxLength":8192},"expected_behavior":{"type":"string","maxLength":8192},"actual_behavior":{"type":"string","maxLength":8192},"environment":{"type":"string","maxLength":8192},"evidence_url":{"type":"string","maxLength":512}},"additionalProperties":false}
         ,
     },
     .{
@@ -81,7 +87,7 @@ pub const all = [_]Tool{
         .scope = .admin_issues,
         .admin = true,
         .schema =
-        \\{"type":"object","required":["idempotency_key","issue_id","status","priority","board_id","pinned","locked"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"issue_id":{"type":"integer","minimum":1},"status":{"type":"string","enum":["pending","reviewing","planned","in_progress","completed","closed"]},"priority":{"type":"string","enum":["none","low","medium","high","urgent"]},"board_id":{"type":"integer","minimum":1},"pinned":{"type":"boolean"},"locked":{"type":"boolean"},"duplicate_of_id":{"type":"integer","minimum":1}},"additionalProperties":false}
+        \\{"type":"object","required":["idempotency_key","issue_id","status","priority","board_id","pinned","locked"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"issue_id":{"type":"integer","minimum":1},"status":{"type":"string","enum":["pending","reviewing","planned","in_progress","completed","closed"]},"priority":{"type":"string","enum":["none","low","medium","high","urgent"]},"board_id":{"type":"integer","minimum":1},"project_id":{"type":"integer","minimum":1},"pinned":{"type":"boolean"},"locked":{"type":"boolean"},"duplicate_of_id":{"type":"integer","minimum":1}},"additionalProperties":false}
         ,
     },
     .{
@@ -109,6 +115,33 @@ pub const all = [_]Tool{
         .admin = true,
         .schema =
         \\{"type":"object","required":["idempotency_key","board_id","name","slug","sort_order"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"board_id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":80},"slug":{"type":"string","minLength":1,"maxLength":80,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"description":{"type":"string","maxLength":500},"color":{"type":"string","enum":["violet","blue","green","amber","rose","gray"]},"sort_order":{"type":"integer","minimum":0,"maximum":10000}},"additionalProperties":false}
+        ,
+    },
+    .{
+        .name = "poof_create_project",
+        .description = "Create a project that feedback can be associated with.",
+        .scope = .admin_boards,
+        .admin = true,
+        .schema =
+        \\{"type":"object","required":["idempotency_key","name","slug"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"name":{"type":"string","minLength":1,"maxLength":80},"slug":{"type":"string","minLength":1,"maxLength":80,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"git_url":{"type":"string","minLength":1,"maxLength":512}},"additionalProperties":false}
+        ,
+    },
+    .{
+        .name = "poof_archive_project",
+        .description = "Archive a project. Existing issues keep the association.",
+        .scope = .admin_boards,
+        .admin = true,
+        .schema =
+        \\{"type":"object","required":["idempotency_key","project_id","confirm"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"project_id":{"type":"integer","minimum":1},"confirm":{"const":true}},"additionalProperties":false}
+        ,
+    },
+    .{
+        .name = "poof_update_project",
+        .description = "Edit and reorder an existing project.",
+        .scope = .admin_boards,
+        .admin = true,
+        .schema =
+        \\{"type":"object","required":["idempotency_key","project_id","name","slug","sort_order"],"properties":{"idempotency_key":{"type":"string","minLength":8,"maxLength":128},"project_id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":80},"slug":{"type":"string","minLength":1,"maxLength":80,"pattern":"^[a-z0-9]+(?:-[a-z0-9]+)*$"},"git_url":{"type":"string","minLength":1,"maxLength":512},"sort_order":{"type":"integer","minimum":0,"maximum":10000}},"additionalProperties":false}
         ,
     },
     .{
@@ -189,7 +222,9 @@ test "tool list excludes admin capabilities from member tokens" {
     try writeList(&writer, scopes, .member);
     const output = storage[0..writer.end];
     try std.testing.expect(std.mem.indexOf(u8, output, "poof_list_issues") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "poof_list_projects") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "poof_update_issue") == null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "poof_create_project") == null);
     try std.testing.expect(!allowed(find("poof_update_issue").?.*, scopes, .member));
     try std.testing.expect(allowed(find("poof_update_issue").?.*, scopes, .admin));
 }

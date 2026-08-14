@@ -44,6 +44,11 @@ const migrations = [_]Migration{
         .name = "admin_mcp_scopes",
         .sql = @embedFile("migration_007"),
     },
+    .{
+        .version = 8,
+        .name = "projects",
+        .sql = @embedFile("migration_008"),
+    },
 };
 
 const advisory_lock_id: i64 = 0x506f6f664d696772;

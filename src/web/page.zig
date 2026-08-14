@@ -23,24 +23,52 @@ pub fn resolveBranding(
     };
 }
 
+pub const ColorScheme = enum { system, light, dark };
+
+pub const theme_cookie = "poof_theme";
+
+pub fn parseColorScheme(value: []const u8) ColorScheme {
+    if (std.mem.eql(u8, value, "dark")) return .dark;
+    if (std.mem.eql(u8, value, "light")) return .light;
+    return .system;
+}
+
+pub fn colorScheme(context: *app_state.Context) ColorScheme {
+    return parseColorScheme(request.cookieValue(context, theme_cookie) orelse "system");
+}
+
 pub fn begin(
     writer: *std.Io.Writer,
     branding: store.SiteBranding,
     title: []const u8,
     active: enum { feedback, roadmap, changelog, admin, none },
     user: ?*const store.User,
+    scheme: ColorScheme,
 ) std.Io.Writer.Error!void {
-    try writer.writeAll("<!doctype html><html lang=\"en\"><head>");
-    try writer.print("<link rel=\"stylesheet\" href=\"{s}\">", .{css_path});
-    try writer.print("<script src=\"{s}\" defer></script>", .{javascript_path});
+    try writer.writeAll("<!doctype html><html lang=\"en\"");
+    switch (scheme) {
+        .system => {},
+        .light => try writer.writeAll(" data-theme=\"light\""),
+        .dark => try writer.writeAll(" data-theme=\"dark\""),
+    }
+    try writer.writeAll("><head>");
     try writer.writeAll(
         "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
     );
+    try writer.writeAll("<meta name=\"color-scheme\" content=\"");
+    try writer.writeAll(switch (scheme) {
+        .system => "light dark",
+        .light => "light",
+        .dark => "dark",
+    });
+    try writer.writeAll("\">");
     try writer.writeAll("<title>");
     try highlight.escapeHtml(writer, title);
     try writer.writeAll(" — ");
     try highlight.escapeHtml(writer, branding.company_name);
     try writer.writeAll("</title>");
+    try writer.print("<link rel=\"stylesheet\" href=\"{s}\">", .{css_path});
+    try writer.print("<script src=\"{s}\" defer></script>", .{javascript_path});
     if (branding.logo_url) |logo| {
         try writer.writeAll("<link rel=\"icon\" href=\"");
         try escapeAttribute(writer, logo);
@@ -64,6 +92,15 @@ pub fn begin(
     try navLink(writer, "/roadmap", "Roadmap", active == .roadmap);
     try navLink(writer, "/changelog", "Changelog", active == .changelog);
     try writer.writeAll("</nav>");
+    try writer.writeAll(
+        "<button type=\"button\" class=\"button button-quiet theme-toggle\" data-theme-toggle aria-label=\"Color scheme\">",
+    );
+    try writer.writeAll(switch (scheme) {
+        .system => "Auto",
+        .light => "Light",
+        .dark => "Dark",
+    });
+    try writer.writeAll("</button>");
     if (user) |principal| {
         if (principal.role == .admin) {
             try writer.writeAll("<a class=\"button button-quiet\" href=\"/admin\">Admin</a>");
@@ -97,6 +134,20 @@ fn writeRenderTime(writer: *std.Io.Writer, elapsed_ns: u64) std.Io.Writer.Error!
         try writer.print("{d} ms", .{elapsed_ns / std.time.ns_per_ms});
     }
     try writer.writeAll("</p>");
+}
+
+pub fn writeQueryComponent(writer: *std.Io.Writer, value: []const u8) std.Io.Writer.Error!void {
+    for (value) |byte| {
+        if (std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_' or
+            byte == '.' or byte == '~')
+        {
+            try writer.writeByte(byte);
+        } else if (byte == ' ') {
+            try writer.writeByte('+');
+        } else {
+            try writer.print("%{X:0>2}", .{byte});
+        }
+    }
 }
 
 pub fn issueUrl(
@@ -149,7 +200,7 @@ pub fn htmlFailure(
     const settings = app_state.config(context) orelse return context.empty(status);
     var workspace = request.Workspace.init(context) catch return context.empty(status);
     var writer = workspace.writer();
-    errorPage(&writer, settings, kicker, title, message, &workspace) catch
+    errorPage(&writer, settings, kicker, title, message, &workspace, colorScheme(context)) catch
         return context.empty(.internal_server_error);
     return context.htmlBorrowed(status, workspace.rendered(&writer));
 }
@@ -161,12 +212,13 @@ pub fn errorPage(
     title: []const u8,
     message: []const u8,
     workspace: *const request.Workspace,
+    scheme: ColorScheme,
 ) std.Io.Writer.Error!void {
     try begin(writer, .{
         .company_name = settings.company_name,
         .tagline = settings.tagline,
         .logo_url = null,
-    }, title, .none, null);
+    }, title, .none, null, scheme);
     try writer.writeAll("<section class=\"empty-card error-page\"><p class=\"kicker\">");
     try highlight.escapeHtml(writer, status);
     try writer.writeAll("</p><h1>");
@@ -186,7 +238,7 @@ pub fn looksLikeImageUrl(url: []const u8) bool {
     return false;
 }
 
-pub const markdown_hint = "Markdown: headings, lists, [ ] tasks, tables, code, and images";
+pub const markdown_hint = "CommonMark + GFM: headings, lists, [ ] tasks, tables, code, images";
 
 pub const IssueEditValues = struct {
     kind: domain.IssueKind,
@@ -197,6 +249,7 @@ pub const IssueEditValues = struct {
     actual_behavior: ?[]const u8 = null,
     environment: ?[]const u8 = null,
     evidence_url: ?[]const u8 = null,
+    project_id: i64 = 0,
 };
 
 pub fn issueEditValues(issue: store.Issue) IssueEditValues {
@@ -209,12 +262,14 @@ pub fn issueEditValues(issue: store.Issue) IssueEditValues {
         .actual_behavior = issue.actual_behavior,
         .environment = issue.environment,
         .evidence_url = issue.evidence_url,
+        .project_id = issue.project_id orelse 0,
     };
 }
 
 pub fn issueEditForm(
     writer: *std.Io.Writer,
     values: IssueEditValues,
+    projects: []const store.Project,
     csrf_input: []const u8,
     action: []const u8,
     cancel_href: []const u8,
@@ -230,6 +285,7 @@ pub fn issueEditForm(
         try highlight.escapeHtml(writer, message);
         try writer.writeAll("</p>");
     }
+    try writeProjectField(writer, projects, values.project_id);
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" value=\"");
     try highlight.escapeHtml(writer, values.title);
     try writer.writeAll("\"></label><label>Description <span class=\"hint\">");
@@ -256,6 +312,26 @@ pub fn issueEditForm(
     try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"");
     try highlight.escapeHtml(writer, cancel_href);
     try writer.writeAll("\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+}
+
+pub fn writeProjectField(
+    writer: *std.Io.Writer,
+    projects: []const store.Project,
+    selected_id: i64,
+) std.Io.Writer.Error!void {
+    if (projects.len == 0) return;
+    try writer.writeAll("<label>Project <span class=\"hint\">optional — which app or git repo</span>");
+    try writer.writeAll("<select name=\"project_id\"><option value=\"0\">None</option>");
+    for (projects) |project| {
+        if (project.archived and project.id != selected_id) continue;
+        try writer.print("<option value=\"{d}\"{s}>", .{
+            project.id,
+            if (project.id == selected_id) " selected" else "",
+        });
+        try highlight.escapeHtml(writer, project.name);
+        try writer.writeAll("</option>");
+    }
+    try writer.writeAll("</select></label>");
 }
 
 /// File picker that POSTs to `/uploads` and fills a URL input or Markdown textarea.
@@ -328,6 +404,21 @@ test "render time uses milliseconds at one millisecond and above" {
         "<p class=\"render-time\">rendered in 12 ms</p>",
         storage[0..writer.end],
     );
+}
+
+test "color scheme cookie values" {
+    try std.testing.expectEqual(ColorScheme.dark, parseColorScheme("dark"));
+    try std.testing.expectEqual(ColorScheme.light, parseColorScheme("light"));
+    try std.testing.expectEqual(ColorScheme.system, parseColorScheme("system"));
+    try std.testing.expectEqual(ColorScheme.system, parseColorScheme(""));
+    try std.testing.expectEqual(ColorScheme.system, parseColorScheme("auto"));
+}
+
+test "query component encodes spaces and reserved bytes" {
+    var storage: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&storage);
+    try writeQueryComponent(&writer, "a b&c");
+    try std.testing.expectEqualStrings("a+b%26c", storage[0..writer.end]);
 }
 
 comptime {
