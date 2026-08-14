@@ -1033,11 +1033,16 @@ pub const Postgres = struct {
         connection.begin() catch return error.DatabaseUnavailable;
         errdefer connection.tryRollback() catch {};
         var actor_row = (connection.row(
-            "SELECT role FROM users WHERE id = $1 AND disabled = false",
+            "SELECT role FROM users WHERE id = $1 AND disabled_at IS NULL",
             .{actor_id},
         ) catch return error.DatabaseUnavailable) orelse return error.Forbidden;
-        const role = try models.parseRole(actor_row.get([]const u8, 0) catch
-            return error.InvalidDatabaseData);
+        const role = models.parseRole(actor_row.get([]const u8, 0) catch {
+            actor_row.deinit() catch {};
+            return error.InvalidDatabaseData;
+        }) catch {
+            actor_row.deinit() catch {};
+            return error.InvalidDatabaseData;
+        };
         actor_row.deinit() catch return error.DatabaseUnavailable;
         var issue_row = (connection.row(
             "SELECT author_id FROM issues WHERE id = $1 FOR UPDATE",
