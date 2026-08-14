@@ -167,6 +167,11 @@ body > main::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted);
 }
 
+body:has(.admin-shell) {
+  position: fixed;
+  inset: 0;
+}
+
 a {
   color: inherit;
 }
@@ -1208,6 +1213,7 @@ select {
   gap: 0;
   min-width: 0;
   overflow-x: auto;
+  overflow-y: clip;
 }
 
 .admin-issue {
