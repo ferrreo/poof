@@ -183,5 +183,8 @@ fn applicationModule(
     module.addAnonymousImport("migration_006", .{
         .root_source_file = b.path("migrations/006_media_relative_urls.sql"),
     });
+    module.addAnonymousImport("migration_007", .{
+        .root_source_file = b.path("migrations/007_admin_mcp_scopes.sql"),
+    });
     return module;
 }

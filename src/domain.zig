@@ -99,17 +99,32 @@ pub const ScopeSet = packed struct(u64) {
         return self.bits & (@as(u64, 1) << @intFromEnum(scope)) != 0;
     }
 
+    pub fn hasAdmin(self: ScopeSet) bool {
+        return self.bits & admin_scope_bits != 0;
+    }
+
     pub fn allowedFor(self: ScopeSet, role: Role) bool {
-        inline for (std.meta.tags(Scope)) |scope| {
-            if (self.contains(scope) and scope.requiresAdmin() and role != .admin) return false;
-        }
+        if (self.hasAdmin() and role != .admin) return false;
         return self.bits & ~valid_scope_bits == 0;
+    }
+
+    pub fn effectiveFor(self: ScopeSet, role: Role) ScopeSet {
+        if (role == .admin) return self;
+        return .{ .bits = self.bits & ~admin_scope_bits };
     }
 };
 
 const valid_scope_bits: u64 = blk: {
     var bits: u64 = 0;
     for (std.meta.tags(Scope)) |scope| bits |= @as(u64, 1) << @intFromEnum(scope);
+    break :blk bits;
+};
+
+pub const admin_scope_bits: u64 = blk: {
+    var bits: u64 = 0;
+    for (std.meta.tags(Scope)) |scope| {
+        if (scope.requiresAdmin()) bits |= @as(u64, 1) << @intFromEnum(scope);
+    }
     break :blk bits;
 };
 
@@ -252,6 +267,12 @@ test "admin scopes cannot be granted to a member" {
     member.insert(.admin_issues);
     try std.testing.expect(!member.allowedFor(.member));
     try std.testing.expect(member.allowedFor(.admin));
+    const effective = member.effectiveFor(.member);
+    try std.testing.expect(effective.contains(.read));
+    try std.testing.expect(effective.contains(.issues_write));
+    try std.testing.expect(!effective.contains(.admin_issues));
+    try std.testing.expect(!effective.hasAdmin());
+    try std.testing.expectEqual(@as(u64, 56), admin_scope_bits);
 }
 
 test "bug reports require useful reproduction and actual behavior" {

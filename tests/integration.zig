@@ -71,6 +71,28 @@ test "PostgreSQL migrations and feedback lifecycle" {
     ));
 
     const pepper = [_]u8{0x77} ** 32;
+    var member_admin_token = poof.api_token.Generated.fromRaw(
+        [_]u8{0x61} ** poof.api_token.lookup_random_bytes,
+        [_]u8{0x62} ** poof.api_token.secret_random_bytes,
+        pepper,
+    );
+    defer member_admin_token.clear();
+    var member_admin_scopes = poof.domain.ScopeSet{};
+    member_admin_scopes.insert(.read);
+    member_admin_scopes.insert(.admin_issues);
+    try std.testing.expectError(
+        error.Conflict,
+        database.createApiToken(
+            arena,
+            member.id,
+            &member_admin_token.lookup,
+            member_admin_token.digest,
+            "Member admin",
+            member_admin_scopes,
+            30,
+        ),
+    );
+
     var generated_token = poof.api_token.Generated.fromRaw(
         [_]u8{0x41} ** poof.api_token.lookup_random_bytes,
         [_]u8{0x52} ** poof.api_token.secret_random_bytes,

@@ -178,7 +178,9 @@ pub const Postgres = struct {
         scopes: domain.ScopeSet,
         expires_days: ?u16,
     ) models.Error!models.ApiToken {
-        if (label.len == 0 or label.len > 80 or scopes.bits == 0 or scopes.bits > 63) {
+        if (label.len == 0 or label.len > 80 or !scopes.contains(.read) or
+            !scopes.allowedFor(.admin))
+        {
             return error.Conflict;
         }
         const expiry: ?i32 = if (expires_days) |days| @intCast(days) else null;
@@ -190,17 +192,34 @@ pub const Postgres = struct {
             "SELECT pg_advisory_xact_lock(5790053260621242964)",
             .{},
         ) catch return error.DatabaseUnavailable;
+        var role_row = (connection.row(
+            "SELECT role FROM users WHERE id = $1 AND disabled_at IS NULL FOR SHARE",
+            .{owner_id},
+        ) catch return error.DatabaseUnavailable) orelse return error.Conflict;
+        const role = models.parseRole(role_row.get([]const u8, 0) catch {
+            role_row.deinit() catch {};
+            return error.InvalidDatabaseData;
+        }) catch {
+            role_row.deinit() catch {};
+            return error.InvalidDatabaseData;
+        };
+        role_row.deinit() catch return error.DatabaseUnavailable;
+        if (!scopes.allowedFor(role)) return error.Conflict;
         var row = (connection.row(
             \\INSERT INTO api_tokens (
             \\    owner_id, lookup_prefix, token_digest, label, scopes, expires_at
             \\)
             \\SELECT
-            \\    $1, $2, $3, $4, $5,
+            \\    u.id, $2, $3, $4, $5,
             \\    CASE WHEN $6::integer IS NULL
             \\         THEN NULL
             \\         ELSE now() + make_interval(days => $6)
             \\    END
-            \\WHERE (
+            \\FROM users u
+            \\WHERE u.id = $1
+            \\  AND u.disabled_at IS NULL
+            \\  AND (u.role = 'admin' OR ($5::bigint & $7::bigint) = 0)
+            \\  AND (
             \\    SELECT count(*) FROM api_tokens
             \\    WHERE owner_id = $1 AND revoked_at IS NULL
             \\      AND (expires_at IS NULL OR expires_at > now())
@@ -214,6 +233,7 @@ pub const Postgres = struct {
             label,
             @as(i64, @intCast(scopes.bits)),
             expiry,
+            @as(i64, @intCast(domain.admin_scope_bits)),
         }) catch return error.DatabaseUnavailable) orelse return error.Conflict;
         const token = try readApiTokenQuery(&row, allocator, 0);
         row.deinit() catch return error.DatabaseUnavailable;
@@ -291,7 +311,7 @@ pub const Postgres = struct {
         if (id_bytes.len != 16) return error.InvalidDatabaseData;
         const scopes_value = row.get(i64, 4) catch return error.InvalidDatabaseData;
         if (scopes_value <= 0 or scopes_value > 63) return error.InvalidDatabaseData;
-        const token = models.ApiToken{
+        var token = models.ApiToken{
             .id = id_bytes[0..16].*,
             .lookup_prefix = try copyQueryColumn(&row, allocator, 1),
             .label = try copyQueryColumn(&row, allocator, 3),
@@ -302,6 +322,7 @@ pub const Postgres = struct {
             .created_at_us = row.get(i64, 8) catch return error.InvalidDatabaseData,
         };
         const owner = try readUserOffset(&row, allocator, 9);
+        token.scopes = token.scopes.effectiveFor(owner.role);
         _ = self.pool.exec(
             "UPDATE api_tokens SET last_used_at = now() WHERE id = $1",
             .{pg.Binary{ .data = &token.id }},

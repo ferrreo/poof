@@ -190,4 +190,6 @@ test "tool list excludes admin capabilities from member tokens" {
     const output = storage[0..writer.end];
     try std.testing.expect(std.mem.indexOf(u8, output, "poof_list_issues") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "poof_update_issue") == null);
+    try std.testing.expect(!allowed(find("poof_update_issue").?.*, scopes, .member));
+    try std.testing.expect(allowed(find("poof_update_issue").?.*, scopes, .admin));
 }
