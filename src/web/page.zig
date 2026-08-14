@@ -13,10 +13,10 @@ pub const javascript_path = assetPath("app.js");
 
 /// Chrome often checks this before external CSS. Keep it inline in <head>.
 pub const view_transition_css =
-    "@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}}";
+    "@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}}html,body{background:Canvas;color:CanvasText}";
 
 pub const view_transition_style_hash: [44]u8 = blk: {
-    @setEvalBranchQuota(10_000);
+    @setEvalBranchQuota(20_000);
     var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(view_transition_css, &digest, .{});
     var encoded: [44]u8 = undefined;
@@ -77,10 +77,7 @@ pub fn begin(
     try writer.writeAll("\"><style>");
     try writer.writeAll(view_transition_css);
     try writer.writeAll("</style>");
-    try writer.print(
-        "<link rel=\"stylesheet\" href=\"{s}\" blocking=\"render\"><link rel=\"expect\" href=\"#site-footer\" blocking=\"render\">",
-        .{css_path},
-    );
+    try writer.print("<link rel=\"stylesheet\" href=\"{s}\" blocking=\"render\">", .{css_path});
     try writer.writeAll("<title>");
     try highlight.escapeHtml(writer, title);
     try writer.writeAll(" — ");

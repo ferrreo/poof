@@ -113,8 +113,6 @@ html[data-theme="dark"] {
 html {
   min-width: 320px;
   height: 100%;
-  overflow-x: clip;
-  overflow-y: clip;
   background: var(--color-paper);
   color: var(--color-ink);
 }
@@ -125,8 +123,6 @@ body {
   height: 100dvh;
   max-height: 100dvh;
   margin: 0;
-  overflow-x: clip;
-  overflow-y: clip;
   color: var(--color-ink);
   background: var(--color-paper);
   font-size: var(--text-base);
@@ -136,6 +132,7 @@ body {
 body > .site-header,
 body > footer {
   flex: none;
+  overflow-x: clip;
 }
 
 body > main {
