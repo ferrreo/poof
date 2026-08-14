@@ -1116,6 +1116,45 @@ pub const Postgres = struct {
         if ((affected orelse 0) != 1) return error.NotFound;
     }
 
+    pub fn getSiteSettings(
+        self: *Postgres,
+        allocator: std.mem.Allocator,
+    ) models.Error!models.SiteBranding {
+        var row = (self.pool.row(
+            \\SELECT company_name, tagline, logo_url
+            \\FROM site_settings
+            \\WHERE id = true
+        , .{}) catch return error.DatabaseUnavailable) orelse return error.NotFound;
+        defer row.deinit() catch {};
+        return .{
+            .company_name = try copyQueryColumn(&row, allocator, 0),
+            .tagline = try copyQueryColumn(&row, allocator, 1),
+            .logo_url = try copyOptionalQueryColumn(&row, allocator, 2),
+        };
+    }
+
+    pub fn updateSiteSettings(
+        self: *Postgres,
+        company_name: []const u8,
+        tagline: []const u8,
+        logo_url: ?[]const u8,
+    ) models.Error!void {
+        if (!validPlainText(company_name, 1, 80) or !validPlainText(tagline, 0, 200)) {
+            return error.Conflict;
+        }
+        if (logo_url) |url| {
+            if (!validHttpUrl(url, 512)) return error.Conflict;
+        }
+        const affected = self.pool.exec(
+            \\UPDATE site_settings SET
+            \\    company_name = $1,
+            \\    tagline = $2,
+            \\    logo_url = $3
+            \\WHERE id = true
+        , .{ company_name, tagline, logo_url }) catch return error.DatabaseUnavailable;
+        if ((affected orelse 0) != 1) return error.NotFound;
+    }
+
     pub fn createChangelog(
         self: *Postgres,
         author_id: i64,
@@ -1640,6 +1679,14 @@ fn validSlug(value: []const u8, maximum: usize) bool {
         }
     }
     return true;
+}
+
+fn validHttpUrl(value: []const u8, maximum: usize) bool {
+    if (value.len == 0 or value.len > maximum) return false;
+    const uri = std.Uri.parse(value) catch return false;
+    return (std.mem.eql(u8, uri.scheme, "https") or
+        std.mem.eql(u8, uri.scheme, "http")) and
+        uri.host != null and uri.user == null and uri.password == null;
 }
 
 fn readChangelog(

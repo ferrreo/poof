@@ -5,6 +5,7 @@ const auth_handlers = @import("web/handlers/auth.zig");
 const developer_handlers = @import("web/handlers/developer.zig");
 const mcp_transport = @import("mcp/transport.zig");
 const public_handlers = @import("web/handlers/public.zig");
+const upload_handlers = @import("web/handlers/upload.zig");
 const csrf_module = @import("web/csrf.zig");
 const web_middleware = @import("web/middleware.zig");
 
@@ -23,6 +24,8 @@ pub const highlight = @import("web/highlight.zig");
 pub const markdown = @import("web/markdown.zig");
 pub const page = @import("web/page.zig");
 pub const web_request = @import("web/request.zig");
+pub const s3 = @import("storage/s3.zig");
+pub const image_sink = @import("storage/image_sink.zig");
 pub const mcp_protocol = @import("mcp/protocol.zig");
 pub const mcp_tools = @import("mcp/tools.zig");
 pub const Assets = ploof.Asset.Bundle(@import("assets"));
@@ -109,6 +112,10 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         admin_handlers.IssueContentDefinition.handle(admin_handlers.editIssueContent),
     ),
     ploof.post(
+        "/admin/settings",
+        admin_handlers.SiteSettingsDefinition.handle(admin_handlers.updateSiteSettings),
+    ),
+    ploof.post(
         "/admin/boards",
         admin_handlers.BoardCreateDefinition.handle(admin_handlers.createBoard),
     ),
@@ -154,6 +161,11 @@ const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
         "/settings/developer/tokens/:id/revoke",
         developer_handlers.RevokeDefinition.handle(developer_handlers.revoke),
     ),
+    ploof.post(
+        "/uploads",
+        upload_handlers.UploadDefinition.handle(upload_handlers.UploadConsumer{}),
+    ),
+    ploof.get("/media/:key", upload_handlers.serveMedia),
 });
 
 pub const App = ploof.Application(.{
@@ -215,6 +227,9 @@ test {
     _ = mcp_protocol;
     _ = mcp_tools;
     _ = public_handlers;
+    _ = upload_handlers;
     _ = csrf_module;
     _ = web_middleware;
+    _ = s3;
+    _ = image_sink;
 }

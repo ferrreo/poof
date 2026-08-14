@@ -1,5 +1,6 @@
 .zig-cache/
 zig-out/
+zig-pkg/
 *.o
 
 # Local configuration and secrets
@@ -9,6 +10,7 @@ zig-out/
 
 # Runtime and integration-test state
 .poof/
+.data/
 data/
 tmp/
 *.log

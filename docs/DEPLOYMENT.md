@@ -53,6 +53,24 @@ https://feedback.example.com/auth/discord/callback
 Set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and
 `DISCORD_REDIRECT_URI`. Poof needs only `identify`.
 
+## RustFS image storage
+
+Poof stores uploaded images (logo, evidence, Markdown inserts) in an
+S3-compatible bucket and serves them through `GET /media/:key`. Configure:
+
+```text
+POOF_RUSTFS_ENDPOINT=https://rustfs.internal:9000
+POOF_RUSTFS_REGION=us-east-1
+POOF_RUSTFS_ACCESS_KEY=...
+POOF_RUSTFS_SECRET_KEY=...
+POOF_RUSTFS_BUCKET=poof-media
+```
+
+Production refuses to start without these. Poof creates the bucket on startup
+when missing. Keep the bucket private; browsers never talk to RustFS directly.
+Uploads are capped at 5 MiB and limited to PNG, JPEG, GIF, and WebP (SVG is
+rejected). Local Compose includes a `rustfs` service on `127.0.0.1:9000`.
+
 ## Reverse proxy
 
 The application binds loopback. Use `deploy/Caddyfile.example` as a baseline.

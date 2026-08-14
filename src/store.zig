@@ -166,6 +166,12 @@ pub const ChangelogInput = struct {
     tags: []const []const u8 = &.{},
 };
 
+pub const SiteBranding = struct {
+    company_name: []const u8,
+    tagline: []const u8,
+    logo_url: ?[]const u8 = null,
+};
+
 pub const AdminIssueUpdate = struct {
     status: domain.IssueStatus,
     priority: domain.Priority,

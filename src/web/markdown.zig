@@ -125,6 +125,19 @@ fn renderInline(writer: *std.Io.Writer, source: []const u8, depth: u8) Error!voi
                 continue;
             }
         }
+        if (std.mem.startsWith(u8, source[cursor..], "![")) {
+            if (linkAt(source, cursor + 1)) |image| {
+                if (safeLink(image.url)) {
+                    try writer.writeAll("<img class=\"markdown-image\" src=\"");
+                    try escapeAttribute(writer, image.url);
+                    try writer.writeAll("\" alt=\"");
+                    try escapeAttribute(writer, image.label);
+                    try writer.writeAll("\" loading=\"lazy\">");
+                    cursor = image.next;
+                    continue;
+                }
+            }
+        }
         if (source[cursor] == '[') {
             if (linkAt(source, cursor)) |link| {
                 if (safeLink(link.url)) {
@@ -236,7 +249,7 @@ fn nextSpecial(source: []const u8, start: usize) usize {
     var cursor = start;
     while (cursor < source.len) : (cursor += 1) {
         switch (source[cursor]) {
-            '`', '*', '[' => return cursor,
+            '`', '*', '[', '!' => return cursor,
             else => {},
         }
     }
@@ -283,4 +296,22 @@ test "Markdown requires a closing code fence" {
     var storage: [128]u8 = undefined;
     var writer = std.Io.Writer.fixed(&storage);
     try std.testing.expectError(error.UnterminatedFence, render(&writer, "```zig\nconst x = 1;"));
+}
+
+test "Markdown renders safe images and rejects javascript sources" {
+    var storage: [4096]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&storage);
+    try render(
+        &writer,
+        "See ![diagram](https://cdn.example.com/a.png?x=1&y=2) and ![bad](javascript:alert(1))",
+    );
+    const output = storage[0..writer.end];
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        output,
+        "src=\"https://cdn.example.com/a.png?x=1&amp;y=2\"",
+    ) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "alt=\"diagram\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "src=\"javascript:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "javascript:alert(1)") != null);
 }

@@ -138,12 +138,13 @@ fn render(
     const csrf_token = csrf.prepare(context) catch
         return context.empty(.internal_server_error);
 
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, settings, "Developer tokens", .none, &principal.user) catch
+    page.begin(&writer, branding, "Developer tokens", .none, &principal.user) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"developer-page\"><header><p class=\"kicker\">Developer settings</p>") catch
+    writer.writeAll("<section class=\"developer-page\"><header>") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>Connect your AI agent.</h1><p>Create a scoped, revocable token for the remote Poof MCP server.</p></header>") catch
+    writer.writeAll("<h1>MCP tokens</h1><p>Scoped, expiring bearer tokens for the remote Poof MCP server.</p></header>") catch
         return context.empty(.internal_server_error);
     if (plaintext) |token| renderNewToken(&writer, settings.public_url, token) catch
         return context.empty(.internal_server_error);
@@ -165,8 +166,8 @@ fn render(
 }
 
 fn renderNewToken(writer: *std.Io.Writer, public_url: []const u8, token: []const u8) !void {
-    try writer.writeAll("<section class=\"token-reveal\" role=\"status\"><p class=\"kicker\">Copy this token now</p>");
-    try writer.writeAll("<h2>It will not be shown again.</h2><pre><code>");
+    try writer.writeAll("<section class=\"token-reveal\" role=\"status\">");
+    try writer.writeAll("<h2>Copy this token now. It will not be shown again.</h2><pre><code>");
     try highlight.escapeHtml(writer, token);
     try writer.writeAll("</code></pre><p>Send it only as <code>Authorization: Bearer …</code> to ");
     try highlight.escapeHtml(writer, public_url);

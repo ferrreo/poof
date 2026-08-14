@@ -38,6 +38,7 @@ pub const Config = struct {
     workers: u8,
     database_pool_size: u8,
     session_ttl_days: u16,
+    rustfs: ?RustfsConfig = null,
 
     pub fn fromMap(map: *const std.process.Environ.Map) Error!Config {
         const environment = try parseEnvironment(optional(map, "POOF_ENV") orelse "development");
@@ -60,6 +61,7 @@ pub const Config = struct {
         try validateRedirectUri(public_url, redirect_uri);
         const admin_ids = try parseAdminIds(optional(map, "POOF_ADMIN_DISCORD_IDS") orelse "");
         if (environment == .production and admin_ids.len == 0) return error.AdminRequired;
+        const rustfs = try parseRustfs(map, environment);
 
         return .{
             .environment = environment,
@@ -97,6 +99,25 @@ pub const Config = struct {
                 1,
                 365,
             ),
+            .rustfs = rustfs,
+        };
+    }
+};
+
+pub const RustfsConfig = struct {
+    endpoint: []const u8,
+    region: []const u8,
+    access_key: []const u8,
+    secret_key: []const u8,
+    bucket: []const u8,
+
+    pub fn storage(self: RustfsConfig) @import("storage/s3.zig").Config {
+        return .{
+            .endpoint = self.endpoint,
+            .region = self.region,
+            .access_key = self.access_key,
+            .secret_key = self.secret_key,
+            .bucket = self.bucket,
         };
     }
 };
@@ -116,6 +137,8 @@ pub const Error = error{
     AdminRequired,
     InvalidSecretKey,
     InvalidNumber,
+    InvalidRustfsConfig,
+    RustfsRequired,
 };
 
 fn required(map: *const std.process.Environ.Map, key: []const u8) Error![]const u8 {
@@ -252,6 +275,51 @@ fn isLocalhost(host: []const u8) bool {
         std.mem.eql(u8, host, "[::1]");
 }
 
+fn parseRustfs(map: *const std.process.Environ.Map, environment: Environment) Error!?RustfsConfig {
+    const endpoint = optional(map, "POOF_RUSTFS_ENDPOINT");
+    const access_key = optional(map, "POOF_RUSTFS_ACCESS_KEY");
+    const secret_key = optional(map, "POOF_RUSTFS_SECRET_KEY");
+    const bucket = optional(map, "POOF_RUSTFS_BUCKET");
+    const region_explicit = optional(map, "POOF_RUSTFS_REGION");
+    const region = region_explicit orelse "us-east-1";
+
+    const any = endpoint != null or access_key != null or secret_key != null or
+        bucket != null or region_explicit != null;
+    if (!any) {
+        if (environment == .production) return error.RustfsRequired;
+        return null;
+    }
+    if (endpoint == null or access_key == null or secret_key == null or bucket == null) {
+        return error.InvalidRustfsConfig;
+    }
+
+    const uri = std.Uri.parse(endpoint.?) catch return error.InvalidRustfsConfig;
+    if (uri.host == null or uri.query != null or uri.fragment != null) {
+        return error.InvalidRustfsConfig;
+    }
+    if (!std.mem.eql(u8, uri.scheme, "http") and !std.mem.eql(u8, uri.scheme, "https")) {
+        return error.InvalidRustfsConfig;
+    }
+    if (bucket.?.len == 0 or bucket.?.len > 63) return error.InvalidRustfsConfig;
+    for (bucket.?) |byte| {
+        const ok = (byte >= 'a' and byte <= 'z') or
+            (byte >= '0' and byte <= '9') or
+            byte == '-' or byte == '.';
+        if (!ok) return error.InvalidRustfsConfig;
+    }
+    if (access_key.?.len == 0 or access_key.?.len > 128) return error.InvalidRustfsConfig;
+    if (secret_key.?.len < 8 or secret_key.?.len > 256) return error.InvalidRustfsConfig;
+    if (region.len == 0 or region.len > 32) return error.InvalidRustfsConfig;
+
+    return .{
+        .endpoint = endpoint.?,
+        .region = region,
+        .access_key = access_key.?,
+        .secret_key = secret_key.?,
+        .bucket = bucket.?,
+    };
+}
+
 fn validMap(allocator: std.mem.Allocator) !std.process.Environ.Map {
     var map = std.process.Environ.Map.init(allocator);
     try map.put("POOF_ENV", "production");
@@ -274,6 +342,11 @@ fn validMap(allocator: std.mem.Allocator) !std.process.Environ.Map {
         "POOF_API_TOKEN_PEPPER",
         "f0e0d0c0b0a090807060504030201000112233445566778899aabbccddeeff00",
     );
+    try map.put("POOF_RUSTFS_ENDPOINT", "http://127.0.0.1:9000");
+    try map.put("POOF_RUSTFS_ACCESS_KEY", "poofadmin");
+    try map.put("POOF_RUSTFS_SECRET_KEY", "poofadmin-dev-secret-key-change");
+    try map.put("POOF_RUSTFS_BUCKET", "poof-media");
+    try map.put("POOF_RUSTFS_REGION", "us-east-1");
     return map;
 }
 
@@ -313,4 +386,40 @@ test "secret keys reject zero and malformed values" {
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
     try std.testing.expectError(error.InvalidSecretKey, Config.fromMap(&map));
+}
+
+test "production requires RustFS object storage" {
+    var map = try validMap(std.testing.allocator);
+    defer map.deinit();
+    try map.put("POOF_RUSTFS_ENDPOINT", "");
+    try map.put("POOF_RUSTFS_ACCESS_KEY", "");
+    try map.put("POOF_RUSTFS_SECRET_KEY", "");
+    try map.put("POOF_RUSTFS_BUCKET", "");
+    try map.put("POOF_RUSTFS_REGION", "");
+    try std.testing.expectError(error.RustfsRequired, Config.fromMap(&map));
+}
+
+test "development may omit RustFS" {
+    var map = try validMap(std.testing.allocator);
+    defer map.deinit();
+    try map.put("POOF_ENV", "development");
+    try map.put("POOF_PUBLIC_URL", "http://127.0.0.1:8080");
+    try map.put(
+        "DISCORD_REDIRECT_URI",
+        "http://127.0.0.1:8080/auth/discord/callback",
+    );
+    try map.put("POOF_RUSTFS_ENDPOINT", "");
+    try map.put("POOF_RUSTFS_ACCESS_KEY", "");
+    try map.put("POOF_RUSTFS_SECRET_KEY", "");
+    try map.put("POOF_RUSTFS_BUCKET", "");
+    try map.put("POOF_RUSTFS_REGION", "");
+    const config = try Config.fromMap(&map);
+    try std.testing.expect(config.rustfs == null);
+}
+
+test "partial RustFS configuration is rejected" {
+    var map = try validMap(std.testing.allocator);
+    defer map.deinit();
+    try map.put("POOF_RUSTFS_SECRET_KEY", "");
+    try std.testing.expectError(error.InvalidRustfsConfig, Config.fromMap(&map));
 }

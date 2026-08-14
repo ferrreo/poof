@@ -68,6 +68,14 @@ pub const BoardUpdateDefinition = ploof.Endpoint(.{
     }, formOptions(4 * 1024, 8)),
 });
 
+pub const SiteSettingsDefinition = ploof.Endpoint(.{
+    .body = ploof.Form.typed(struct {
+        company_name: []const u8,
+        tagline: []const u8 = "",
+        logo_url: ?[]const u8 = null,
+    }, formOptions(4 * 1024, 6)),
+});
+
 pub const ChangelogCreateDefinition = ploof.Endpoint(.{
     .body = ploof.Form.typed(struct {
         title: []const u8,
@@ -131,15 +139,18 @@ pub fn dashboard(
         &changelog_storage,
     ) catch return context.empty(.service_unavailable);
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(allocator, database, settings);
 
     var writer = workspace.writer();
-    page.begin(&writer, settings, "Admin", .admin, &principal.user) catch
+    page.begin(&writer, branding, "Admin", .admin, &principal.user) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<section class=\"admin-shell\"><header class=\"admin-heading\"><div><p class=\"kicker\">Single-company admin</p>") catch
+    writer.writeAll("<section class=\"admin-shell\"><header class=\"admin-heading\"><div>") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>Keep feedback moving.</h1><p>Triage the backlog, shape the roadmap, and publish what shipped.</p></div>") catch
+    writer.writeAll("<h1>Triage</h1><p>Status, priority, boards, branding, and release notes for this company.</p></div>") catch
         return context.empty(.internal_server_error);
     writer.print("<div class=\"admin-stat\"><strong>{d}</strong><span>feedback items</span></div></header>", .{issues.total}) catch
+        return context.empty(.internal_server_error);
+    renderBranding(&writer, branding, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
     renderIssues(&writer, issues, boards, token.hiddenInput(), query) catch
         return context.empty(.internal_server_error);
@@ -187,6 +198,30 @@ pub fn updateIssue(
     return request.redirect(context, .see_other, "/admin#issues");
 }
 
+pub fn updateSiteSettings(
+    context: *app_state.Context,
+    input: SiteSettingsDefinition.InputType,
+) app_state.Context.ResponseType {
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    _ = adminPrincipal(context, workspace.allocator()) catch |problem| return switch (problem) {
+        error.Forbidden => context.empty(.forbidden),
+        else => context.empty(.service_unavailable),
+    };
+    const logo = nonEmpty(input.body.logo_url);
+    database.updateSiteSettings(
+        input.body.company_name,
+        input.body.tagline,
+        logo,
+    ) catch |problem| return switch (problem) {
+        error.Conflict => context.textStatic(.unprocessable_entity, "Branding values are invalid."),
+        else => context.empty(.service_unavailable),
+    };
+    return request.redirect(context, .see_other, "/admin#branding");
+}
+
 pub fn editIssuePage(context: *app_state.Context) app_state.Context.ResponseType {
     const settings = app_state.config(context) orelse
         return context.empty(.service_unavailable);
@@ -205,8 +240,9 @@ pub fn editIssuePage(context: *app_state.Context) app_state.Context.ResponseType
         else => context.empty(.service_unavailable),
     };
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, settings, "Edit feedback", .admin, &principal.user) catch
+    page.begin(&writer, branding, "Edit feedback", .admin, &principal.user) catch
         return context.empty(.internal_server_error);
     tryRenderIssueContentForm(&writer, issue, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -396,8 +432,9 @@ pub fn editChangelogPage(context: *app_state.Context) app_state.Context.Response
         &linked_storage,
     ) catch return context.empty(.service_unavailable);
     const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(allocator, database, settings);
     var writer = workspace.writer();
-    page.begin(&writer, settings, "Edit changelog", .admin, &principal.user) catch
+    page.begin(&writer, branding, "Edit changelog", .admin, &principal.user) catch
         return context.empty(.internal_server_error);
     renderChangelogEditForm(&writer, entry, linked, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -459,7 +496,7 @@ fn renderIssues(
     csrf_input: []const u8,
     query: DashboardQuery,
 ) !void {
-    try writer.writeAll("<section class=\"admin-section\" id=\"issues\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Triage</p><h2>Feedback backlog</h2></div></div>");
+    try writer.writeAll("<section class=\"admin-section\" id=\"issues\"><div class=\"admin-section-heading\"><h2>Feedback backlog</h2></div>");
     try writer.writeAll("<form class=\"admin-filters\" method=\"get\" action=\"/admin\"><input type=\"search\" name=\"q\" placeholder=\"Search feedback\" value=\"");
     if (query.q) |value| try highlight.escapeHtml(writer, value);
     try writer.writeAll("\"><select name=\"status\"><option value=\"all\">All statuses</option>");
@@ -517,8 +554,9 @@ fn renderIssues(
         try writer.writeAll("<label>Duplicate of<input type=\"number\" name=\"duplicate_of_id\" min=\"1\" value=\"");
         if (issue.duplicate_of_id) |target| try writer.print("{d}", .{target});
         try writer.writeAll("\"></label>");
+        try writer.writeAll("<div class=\"admin-row-actions\">");
         try writer.print("<a class=\"button button-quiet\" href=\"/admin/issues/{d}/edit\">Edit</a>", .{issue.id});
-        try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Save</button></form>");
+        try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Save</button></div></form>");
     }
     try writer.writeAll("</div><nav class=\"pagination\" aria-label=\"Admin feedback pages\">");
     const page_number = @max(query.page, 1);
@@ -536,7 +574,7 @@ fn renderBoards(
     boards: []const models.Board,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"admin-section\" id=\"boards\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Organization</p><h2>Boards</h2></div></div><div class=\"board-admin-grid\">");
+    try writer.writeAll("<section class=\"admin-section\" id=\"boards\"><div class=\"admin-section-heading\"><h2>Boards</h2></div><div class=\"board-admin-grid\">");
     for (boards) |board| {
         try writer.writeAll("<article class=\"admin-card\"><div><strong>");
         try highlight.escapeHtml(writer, board.name);
@@ -546,6 +584,7 @@ fn renderBoards(
         if (board.archived) {
             try writer.writeAll("<span class=\"status status-closed\">Archived</span>");
         } else {
+            try writer.writeAll("<div class=\"admin-card-tools\">");
             try writer.print("<form class=\"board-edit\" method=\"post\" action=\"/admin/boards/{d}\">", .{board.id});
             try writer.writeAll(csrf_input);
             try writer.writeAll("<label>Name<input name=\"name\" required maxlength=\"80\" value=\"");
@@ -558,9 +597,9 @@ fn renderBoards(
             try writer.writeAll("<input type=\"hidden\" name=\"color\" value=\"");
             try highlight.escapeHtml(writer, board.color);
             try writer.writeAll("\"><button class=\"button button-primary\" type=\"submit\">Save</button></form>");
-            try writer.print("<form method=\"post\" action=\"/admin/boards/{d}/archive\" data-confirm=\"Archive this board?\">", .{board.id});
+            try writer.print("<form class=\"board-archive\" method=\"post\" action=\"/admin/boards/{d}/archive\" data-confirm=\"Archive this board?\">", .{board.id});
             try writer.writeAll(csrf_input);
-            try writer.writeAll("<input type=\"hidden\" name=\"confirm\" value=\"true\"><button class=\"button button-quiet\" type=\"submit\">Archive</button></form>");
+            try writer.writeAll("<input type=\"hidden\" name=\"confirm\" value=\"true\"><button class=\"button button-quiet\" type=\"submit\">Archive</button></form></div>");
         }
         try writer.writeAll("</article>");
     }
@@ -576,14 +615,15 @@ fn tryRenderIssueContentForm(
     issue: models.Issue,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"form-page\"><div><p class=\"kicker\">Admin editor</p><h1>Edit feedback.</h1><p>Changes are recorded in the issue activity history.</p></div>");
+    try writer.writeAll("<section class=\"form-page\"><div><h1>Edit feedback</h1><p>Changes are recorded in the issue activity history.</p></div>");
     try writer.print("<form class=\"stacked-form\" method=\"post\" action=\"/admin/issues/{d}/content\">", .{issue.id});
     try writer.writeAll(csrf_input);
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" value=\"");
     try highlight.escapeHtml(writer, issue.title);
-    try writer.writeAll("\"></label><label>Description<textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"10\">");
+    try writer.writeAll("\"></label><label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"10\">");
     try highlight.escapeHtml(writer, issue.body_markdown);
     try writer.writeAll("</textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
     if (issue.kind == .bug) {
         try writer.writeAll("<div class=\"form-row\"><label>Steps to reproduce<textarea name=\"reproduction_steps\" required maxlength=\"8192\" rows=\"5\">");
         try optionalText(writer, issue.reproduction_steps);
@@ -595,9 +635,36 @@ fn tryRenderIssueContentForm(
         try optionalText(writer, issue.environment);
         try writer.writeAll("</textarea></label></div>");
     }
-    try writer.writeAll("<label>Evidence URL<input type=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
+    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
     try optionalText(writer, issue.evidence_url);
-    try writer.writeAll("\"></label><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+    try writer.writeAll("\"></label>");
+    try page.imageUploadControl(writer, .url);
+    try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+}
+
+fn renderBranding(
+    writer: *std.Io.Writer,
+    branding: models.SiteBranding,
+    csrf_input: []const u8,
+) !void {
+    try writer.writeAll("<section class=\"admin-section\" id=\"branding\"><div class=\"admin-section-heading\"><h2>Site branding</h2></div>");
+    try writer.writeAll("<form class=\"site-branding-form\" method=\"post\" action=\"/admin/settings\">");
+    try writer.writeAll(csrf_input);
+    try writer.writeAll("<label>Site title<input name=\"company_name\" required maxlength=\"80\" value=\"");
+    try highlight.escapeHtml(writer, branding.company_name);
+    try writer.writeAll("\"></label><label>Tagline<input name=\"tagline\" maxlength=\"200\" value=\"");
+    try highlight.escapeHtml(writer, branding.tagline);
+    try writer.writeAll("\"></label><div class=\"upload-field\"><label>Logo URL <span class=\"hint\">upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"url\" name=\"logo_url\" maxlength=\"512\" placeholder=\"https://.../logo.png\" value=\"");
+    try optionalText(writer, branding.logo_url);
+    try writer.writeAll("\"></label>");
+    try page.imageUploadControl(writer, .url);
+    try writer.writeAll("</div>");
+    if (branding.logo_url) |logo| {
+        try writer.writeAll("<p class=\"branding-preview\"><img class=\"brand-logo\" src=\"");
+        try highlight.escapeHtml(writer, logo);
+        try writer.writeAll("\" alt=\"Current logo\"></p>");
+    }
+    try writer.writeAll("<div class=\"form-actions\"><button class=\"button button-primary\" type=\"submit\">Save branding</button></div></form></section>");
 }
 
 fn optionalText(writer: *std.Io.Writer, value: ?[]const u8) !void {
@@ -610,7 +677,7 @@ fn renderChangelogs(
     current_page: u16,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"admin-section\" id=\"changelog\"><div class=\"admin-section-heading\"><div><p class=\"kicker\">Releases</p><h2>Changelog</h2></div></div>");
+    try writer.writeAll("<section class=\"admin-section\" id=\"changelog\"><div class=\"admin-section-heading\"><h2>Changelog</h2></div>");
     if (entries.len != 0) {
         try writer.writeAll("<div class=\"board-admin-grid\">");
         for (entries) |entry| {
@@ -647,7 +714,8 @@ fn renderChangelogs(
     try writer.writeAll("<div class=\"form-row\"><label>Version<input name=\"version\" maxlength=\"64\" placeholder=\"1.0.0\"></label><label>Tags<input name=\"tags\" maxlength=\"300\" placeholder=\"new-feature, improvement\"></label></div>");
     try writer.writeAll("<label>Completed issue IDs <span class=\"hint\">optional, comma separated</span><input name=\"issue_ids\" maxlength=\"500\" placeholder=\"42, 57\"></label>");
     try writer.writeAll("<label>Summary<input name=\"summary\" required maxlength=\"500\"></label>");
-    try writer.writeAll("<label>Release notes<textarea name=\"body\" required maxlength=\"65536\" rows=\"10\" placeholder=\"Markdown and fenced code are supported.\"></textarea></label>");
+    try writer.writeAll("<label>Release notes <span class=\"hint\">Markdown, fenced code, and ![alt](https://...) images</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"10\" placeholder=\"What shipped?\"></textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<div class=\"form-actions\"><button class=\"button button-primary\" type=\"submit\">Save draft</button></div></form></section>");
 }
 
@@ -657,7 +725,7 @@ fn renderChangelogEditForm(
     linked: []const models.IssueSummary,
     csrf_input: []const u8,
 ) !void {
-    try writer.writeAll("<section class=\"form-page\"><div><p class=\"kicker\">Changelog editor</p><h1>Edit release notes.</h1><p>Save the draft here, then publish explicitly from the admin dashboard.</p></div>");
+    try writer.writeAll("<section class=\"form-page\"><div><h1>Edit release notes</h1><p>Save the draft here, then publish from the admin dashboard.</p></div>");
     try writer.print("<form class=\"stacked-form\" method=\"post\" action=\"/admin/changelog/{d}/content\">", .{entry.id});
     try writer.writeAll(csrf_input);
     try writer.writeAll("<div class=\"form-row\"><label>Title<input name=\"title\" required maxlength=\"160\" value=\"");
@@ -676,9 +744,11 @@ fn renderChangelogEditForm(
     }
     try writer.writeAll("\"></label><label>Summary<input name=\"summary\" required maxlength=\"500\" value=\"");
     try highlight.escapeHtml(writer, entry.summary);
-    try writer.writeAll("\"></label><label>Release notes<textarea name=\"body\" required maxlength=\"65536\" rows=\"12\">");
+    try writer.writeAll("\"></label><label>Release notes <span class=\"hint\">Markdown, fenced code, and ![alt](https://...) images</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"12\">");
     try highlight.escapeHtml(writer, entry.body_markdown);
-    try writer.writeAll("</textarea></label><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin#changelog\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+    try writer.writeAll("</textarea></label>");
+    try page.imageUploadControl(writer, .markdown);
+    try writer.writeAll("<div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin#changelog\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
 }
 
 fn formOptions(comptime bytes: u64, comptime segments: u16) ploof.Form.Options {

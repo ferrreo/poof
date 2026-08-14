@@ -35,6 +35,7 @@ Poof is licensed under BSD-3-Clause and contains no paid feature gates.
 - Linux 6.1+ on x86_64-v3 hardware
 - PostgreSQL 13+
 - A Discord application
+- RustFS (or another S3-compatible store) for image uploads
 - A TLS reverse proxy for production
 
 Ploof actively checks its io_uring requirements at startup and does not fall
@@ -42,10 +43,10 @@ back to a reduced reactor.
 
 ## Quick start
 
-1. Start PostgreSQL:
+1. Start PostgreSQL and RustFS:
 
    ```sh
-   docker compose up -d postgres
+   docker compose up -d postgres rustfs
    ```
 
 2. Copy and configure the environment:
@@ -58,7 +59,8 @@ back to a reduced reactor.
 
    Put the two different generated values in `POOF_CSRF_KEY` and
    `POOF_API_TOKEN_PEPPER`. Configure the Discord callback to exactly match
-   `DISCORD_REDIRECT_URI`.
+   `DISCORD_REDIRECT_URI`. Set the `POOF_RUSTFS_*` values to match the RustFS
+   service (defaults in `.env.example` work with Compose).
 
 3. Build and run:
 

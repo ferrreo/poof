@@ -177,5 +177,8 @@ fn applicationModule(
     module.addAnonymousImport("migration_004", .{
         .root_source_file = b.path("migrations/004_concurrency_guards.sql"),
     });
+    module.addAnonymousImport("migration_005", .{
+        .root_source_file = b.path("migrations/005_site_settings.sql"),
+    });
     return module;
 }
