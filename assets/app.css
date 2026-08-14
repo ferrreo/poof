@@ -353,7 +353,8 @@ nav a.active {
 .admin-shell,
 .developer-page,
 .profile-page,
-.form-page {
+.form-page,
+main > .empty-card {
   width: var(--page);
   margin-right: auto;
   margin-left: auto;
