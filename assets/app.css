@@ -8,20 +8,24 @@
 
 :root {
   color-scheme: light dark;
-  --color-paper: light-dark(oklch(97.5% 0.015 96), oklch(16% 0.012 96));
-  --color-paper-2: light-dark(oklch(95.5% 0.018 96), oklch(20% 0.014 96));
-  --color-paper-3: light-dark(oklch(93% 0.022 96), oklch(24% 0.016 96));
-  --color-rule: light-dark(oklch(82% 0.014 96), oklch(34% 0.014 96));
-  --color-rule-2: light-dark(oklch(68% 0.016 96), oklch(48% 0.016 96));
-  --color-muted: light-dark(oklch(52% 0.014 96), oklch(72% 0.014 96));
-  --color-neutral: light-dark(oklch(38% 0.013 96), oklch(78% 0.012 96));
-  --color-ink-2: light-dark(oklch(32% 0.012 96), oklch(88% 0.012 96));
-  --color-ink: light-dark(oklch(26% 0.012 96), oklch(94% 0.012 96));
-  --color-accent: light-dark(oklch(90.2% 0.173 96.7), oklch(84% 0.145 96.7));
+  --color-paper: light-dark(oklch(97.5% 0.015 96), oklch(17% 0.012 96));
+  --color-paper-2: light-dark(oklch(95.5% 0.018 96), oklch(21% 0.014 96));
+  --color-paper-3: light-dark(oklch(93% 0.022 96), oklch(25% 0.016 96));
+  --color-rule: light-dark(oklch(82% 0.014 96), oklch(27% 0.014 96));
+  --color-rule-2: light-dark(oklch(68% 0.016 96), oklch(38% 0.018 96));
+  --color-muted: light-dark(oklch(52% 0.014 96), oklch(68% 0.014 96));
+  --color-neutral: light-dark(oklch(38% 0.013 96), oklch(54% 0.012 96));
+  --color-ink-2: light-dark(oklch(32% 0.012 96), oklch(78% 0.016 96));
+  --color-ink: light-dark(oklch(26% 0.012 96), oklch(91% 0.012 96));
+  --color-accent: light-dark(oklch(90.2% 0.173 96.7), oklch(88% 0.17 96));
   --color-accent-ink: light-dark(oklch(42% 0.12 96), oklch(86% 0.11 96));
-  --color-focus: light-dark(oklch(72% 0.16 96.7), oklch(78% 0.14 96.7));
+  --color-focus: light-dark(oklch(72% 0.16 96.7), oklch(88% 0.17 96));
   --color-code-paper: light-dark(oklch(22% 0.012 96), oklch(12% 0.012 96));
   --color-code-ink: oklch(94% 0.02 96);
+  --color-edge: light-dark(oklch(26% 0.012 96), oklch(38% 0.018 96));
+  --color-primary-fill: light-dark(oklch(26% 0.012 96), oklch(88% 0.17 96));
+  --color-primary-text: light-dark(oklch(90.2% 0.173 96.7), oklch(24% 0.045 96));
+  --color-primary-fill-hover: light-dark(oklch(32% 0.012 96), oklch(82% 0.155 96));
 
   --font-display: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Ubuntu Sans", ui-sans-serif, system-ui, sans-serif;
@@ -176,7 +180,7 @@ h3 {
   width: 100%;
   padding: var(--space-sm) max(calc((100% - 72rem) / 2 + var(--space-md)), var(--space-md));
   background: var(--color-paper-3);
-  border-bottom: var(--rule-heavy) solid var(--color-ink);
+  border-bottom: var(--rule-heavy) solid var(--color-edge);
 }
 
 .masthead-kicker {
@@ -258,7 +262,7 @@ nav a.active {
   gap: var(--space-xs);
   min-height: var(--control-height);
   padding: 0 var(--space-md);
-  border: var(--rule-heavy) solid var(--color-ink);
+  border: var(--rule-heavy) solid var(--color-edge);
   border-radius: var(--radius-sm);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -296,21 +300,22 @@ nav a.active {
 }
 
 .button[data-state="success"] {
-  background: var(--color-ink);
-  color: var(--color-accent);
+  background: var(--color-primary-fill);
+  color: var(--color-primary-text);
+  border-color: var(--color-primary-fill);
 }
 
 .button-primary {
-  background: var(--color-ink);
-  color: var(--color-accent);
-  border-color: var(--color-ink);
+  background: var(--color-primary-fill);
+  color: var(--color-primary-text);
+  border-color: var(--color-primary-fill);
 }
 
 .button-primary:hover,
 .button-primary.is-hover {
-  background: var(--color-ink-2);
-  border-color: var(--color-ink-2);
-  color: var(--color-accent);
+  background: var(--color-primary-fill-hover);
+  border-color: var(--color-primary-fill-hover);
+  color: var(--color-primary-text);
 }
 
 .button-quiet {
@@ -572,8 +577,8 @@ select {
   width: 0.4em;
   height: 0.4em;
   flex: none;
-  border-right: var(--rule-heavy) solid var(--color-ink);
-  border-bottom: var(--rule-heavy) solid var(--color-ink);
+  border-right: var(--rule-heavy) solid currentColor;
+  border-bottom: var(--rule-heavy) solid currentColor;
   transform: rotate(-45deg);
   translate: 0 -0.05em;
 }
@@ -614,16 +619,16 @@ select {
 .issue-card {
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: center;
   gap: var(--space-md);
   padding: var(--space-md) 0;
   border-bottom: var(--rule-card) solid var(--color-rule);
 }
 
 .vote-count {
-  align-self: start;
+  align-self: center;
   display: grid;
   place-items: center;
-  min-height: 3.25rem;
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
@@ -826,7 +831,7 @@ select {
   gap: var(--space-sm);
   margin-bottom: var(--space-md);
   padding-bottom: var(--space-xs);
-  border-bottom: var(--rule-heavy) solid var(--color-ink);
+  border-bottom: var(--rule-heavy) solid var(--color-edge);
 }
 
 .roadmap-column h2 {
@@ -933,7 +938,7 @@ select {
   display: grid;
   gap: var(--space-sm);
   padding-top: var(--space-md);
-  border-top: var(--rule-heavy) solid var(--color-ink);
+  border-top: var(--rule-heavy) solid var(--color-edge);
 }
 
 .issue-actions .button {
@@ -1049,7 +1054,7 @@ select {
 .changelog-detail > header {
   margin-bottom: var(--space-xl);
   padding-bottom: var(--space-lg);
-  border-bottom: var(--rule-heavy) solid var(--color-ink);
+  border-bottom: var(--rule-heavy) solid var(--color-edge);
 }
 
 .changelog-detail > header > p:not(.kicker) {
@@ -1087,7 +1092,7 @@ select {
 .admin-stat {
   min-width: 7rem;
   padding-bottom: var(--space-xs);
-  border-bottom: var(--rule-heavy) solid var(--color-ink);
+  border-bottom: var(--rule-heavy) solid var(--color-edge);
 }
 
 .admin-stat strong,
@@ -1305,7 +1310,7 @@ select {
 .token-reveal {
   color: var(--color-ink);
   background: var(--color-paper-2);
-  border-top: var(--rule-heavy) solid var(--color-ink);
+  border-top: var(--rule-heavy) solid var(--color-edge);
 }
 
 .token-list,
@@ -1432,7 +1437,7 @@ select {
 .stacked-form {
   margin-top: var(--space-xl);
   padding-top: var(--space-lg);
-  border-top: var(--rule-heavy) solid var(--color-ink);
+  border-top: var(--rule-heavy) solid var(--color-edge);
 }
 
 .form-row {
@@ -1552,7 +1557,7 @@ form:has([data-kind-select] option[value="bug"]:checked) .bug-fields {
   margin: 0.32em 0 0;
   padding: 0;
   flex: none;
-  border: var(--rule-heavy) solid var(--color-ink);
+  border: var(--rule-heavy) solid var(--color-edge);
   border-radius: var(--radius-sm);
   background: var(--color-paper);
   opacity: 1;
@@ -1715,7 +1720,7 @@ footer {
   width: var(--page);
   margin: 0 auto;
   padding: var(--space-lg) 0 var(--space-2xl);
-  border-top: var(--rule-heavy) solid var(--color-ink);
+  border-top: var(--rule-heavy) solid var(--color-edge);
   color: var(--color-muted);
   font-size: var(--text-xs);
   line-height: var(--lh-relaxed);

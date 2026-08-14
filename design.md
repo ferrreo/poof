@@ -18,17 +18,20 @@ modern-minimal
 
 ## Theme
 
-Studied DNA from https://pika-os.com. Warm paper yellows, ink borders, bright
-amber accent.
+Studied DNA from https://pika-os.com, dark surfaces from
+https://builder.pika-os.com. Warm paper yellows in light, charcoal paper in
+dark, amber accent. Primary CTA is ink fill with amber text in light, amber
+fill with dark text in dark (builder sidebar chip).
 
-- `--color-paper`   light-dark(oklch(97.5% 0.015 96), oklch(16% 0.012 96))
-- `--color-paper-2` light-dark(oklch(95.5% 0.018 96), oklch(20% 0.014 96))
-- `--color-paper-3` light-dark(oklch(93% 0.022 96), oklch(24% 0.016 96))
-- `--color-ink`     light-dark(oklch(26% 0.012 96), oklch(94% 0.012 96))
-- `--color-ink-2`   light-dark(oklch(32% 0.012 96), oklch(88% 0.012 96))
-- `--color-rule`    light-dark(oklch(82% 0.014 96), oklch(34% 0.014 96))
-- `--color-accent`  light-dark(oklch(90.2% 0.173 96.7), oklch(84% 0.145 96.7))
-- `--color-focus`   light-dark(oklch(72% 0.16 96.7), oklch(78% 0.14 96.7))
+- `--color-paper`   light-dark(oklch(97.5% 0.015 96), oklch(17% 0.012 96))
+- `--color-paper-2` light-dark(oklch(95.5% 0.018 96), oklch(21% 0.014 96))
+- `--color-paper-3` light-dark(oklch(93% 0.022 96), oklch(25% 0.016 96))
+- `--color-ink`     light-dark(oklch(26% 0.012 96), oklch(91% 0.012 96))
+- `--color-ink-2`   light-dark(oklch(32% 0.012 96), oklch(78% 0.016 96))
+- `--color-rule`    light-dark(oklch(82% 0.014 96), oklch(27% 0.014 96))
+- `--color-accent`  light-dark(oklch(90.2% 0.173 96.7), oklch(88% 0.17 96))
+- `--color-focus`   light-dark(oklch(72% 0.16 96.7), oklch(88% 0.17 96))
+- `--color-primary-fill` / `--color-primary-text` for CTA (do not invert `--color-ink`)
 
 ## Typography
 
@@ -62,9 +65,10 @@ tokens (`var(--space-md)`), never raw values.
 
 ## CTA voice
 
-- Primary CTA: ink fill, amber text, small radius, 14px Ubuntu Sans 600. Verb
-  names the action (`New feedback`, `Post comment`, `Save`).
-- Secondary CTA: 1px ink/rule border, paper fill, same padding rhythm.
+- Primary CTA: ink fill + amber text in light; amber fill + dark text in dark.
+  Small radius, 14px Ubuntu Sans 600. Verb names the action (`New feedback`,
+  `Post comment`, `Save`).
+- Secondary CTA: 1px edge border, paper fill, same padding rhythm.
 
 ## Per-page allowances
 
