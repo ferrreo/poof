@@ -318,12 +318,27 @@ fn signedExchange(
 
     var client = std.http.Client{ .allocator = allocator, .io = io };
     defer client.deinit();
+    // Zig 0.16 `fetch` writes into the const `Reader.ending` sentinel for HEAD
+    // (`responseHasBody() == false`), which SIGSEGVs. Read headers only.
+    if (method == .HEAD) {
+        var req = client.request(.HEAD, uri, .{
+            .redirect_behavior = .unhandled,
+            .extra_headers = headers_storage[0..header_count],
+        }) catch return error.RequestFailed;
+        defer req.deinit();
+        req.sendBodiless() catch return error.RequestFailed;
+        const response = req.receiveHead(&.{}) catch return error.RequestFailed;
+        return response.head.status;
+    }
+
+    var discard_buf: [512]u8 = undefined;
+    var discarding = std.Io.Writer.Discarding.init(&discard_buf);
     const result = client.fetch(.{
         .location = .{ .url = url },
         .method = method,
-        .payload = if (method == .GET or method == .HEAD) null else payload,
+        .payload = if (method == .GET) null else payload,
         .extra_headers = headers_storage[0..header_count],
-        .response_writer = response_writer,
+        .response_writer = response_writer orelse &discarding.writer,
         .redirect_behavior = .unhandled,
     }) catch return error.RequestFailed;
     return result.status;
