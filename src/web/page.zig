@@ -186,6 +186,78 @@ pub fn looksLikeImageUrl(url: []const u8) bool {
     return false;
 }
 
+pub const markdown_hint = "Markdown: headings, lists, [ ] tasks, tables, code, and images";
+
+pub const IssueEditValues = struct {
+    kind: domain.IssueKind,
+    title: []const u8,
+    body: []const u8,
+    reproduction_steps: ?[]const u8 = null,
+    expected_behavior: ?[]const u8 = null,
+    actual_behavior: ?[]const u8 = null,
+    environment: ?[]const u8 = null,
+    evidence_url: ?[]const u8 = null,
+};
+
+pub fn issueEditValues(issue: store.Issue) IssueEditValues {
+    return .{
+        .kind = issue.kind,
+        .title = issue.title,
+        .body = issue.body_markdown,
+        .reproduction_steps = issue.reproduction_steps,
+        .expected_behavior = issue.expected_behavior,
+        .actual_behavior = issue.actual_behavior,
+        .environment = issue.environment,
+        .evidence_url = issue.evidence_url,
+    };
+}
+
+pub fn issueEditForm(
+    writer: *std.Io.Writer,
+    values: IssueEditValues,
+    csrf_input: []const u8,
+    action: []const u8,
+    cancel_href: []const u8,
+    error_message: ?[]const u8,
+) std.Io.Writer.Error!void {
+    try writer.writeAll("<section class=\"form-page\"><div><h1>Edit feedback</h1><p>Changes are recorded in the issue activity history.</p></div>");
+    try writer.writeAll("<form class=\"stacked-form\" method=\"post\" action=\"");
+    try highlight.escapeHtml(writer, action);
+    try writer.writeAll("\">");
+    try writer.writeAll(csrf_input);
+    if (error_message) |message| {
+        try writer.writeAll("<p class=\"form-error\" role=\"alert\">");
+        try highlight.escapeHtml(writer, message);
+        try writer.writeAll("</p>");
+    }
+    try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" value=\"");
+    try highlight.escapeHtml(writer, values.title);
+    try writer.writeAll("\"></label><label>Description <span class=\"hint\">");
+    try writer.writeAll(markdown_hint);
+    try writer.writeAll("</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"10\">");
+    try highlight.escapeHtml(writer, values.body);
+    try writer.writeAll("</textarea></label>");
+    try imageUploadControl(writer, .markdown);
+    if (values.kind == .bug) {
+        try writer.writeAll("<div class=\"form-row\"><label>Steps to reproduce<textarea name=\"reproduction_steps\" required maxlength=\"8192\" rows=\"5\">");
+        try highlight.escapeHtml(writer, values.reproduction_steps orelse "");
+        try writer.writeAll("</textarea></label><label>Actual behavior<textarea name=\"actual_behavior\" required maxlength=\"8192\" rows=\"5\">");
+        try highlight.escapeHtml(writer, values.actual_behavior orelse "");
+        try writer.writeAll("</textarea></label></div><div class=\"form-row\"><label>Expected behavior<textarea name=\"expected_behavior\" maxlength=\"8192\" rows=\"4\">");
+        try highlight.escapeHtml(writer, values.expected_behavior orelse "");
+        try writer.writeAll("</textarea></label><label>Environment<textarea name=\"environment\" maxlength=\"8192\" rows=\"4\">");
+        try highlight.escapeHtml(writer, values.environment orelse "");
+        try writer.writeAll("</textarea></label></div>");
+    }
+    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">optional — upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"text\" inputmode=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
+    try highlight.escapeHtml(writer, values.evidence_url orelse "");
+    try writer.writeAll("\"></label>");
+    try imageUploadControl(writer, .url);
+    try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"");
+    try highlight.escapeHtml(writer, cancel_href);
+    try writer.writeAll("\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+}
+
 /// File picker that POSTs to `/uploads` and fills a URL input or Markdown textarea.
 pub fn imageUploadControl(
     writer: *std.Io.Writer,

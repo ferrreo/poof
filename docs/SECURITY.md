@@ -78,9 +78,10 @@ onto Poof.
 ## Rich text
 
 Raw HTML is always escaped. Poof's bounded Markdown subset permits headings,
-lists, quotes, emphasis, code, and `http`/`https` links without allowing script,
-event attributes, embedded HTML, or dangerous URL schemes. zhl renders escaped
-token spans for recognized fenced-code languages.
+lists, task lists, quotes, tables, emphasis, strikethrough, fenced code, and
+`http`/`https` or `/media/` links without allowing script, event attributes,
+embedded HTML, or dangerous URL schemes. zhl renders escaped token spans for
+recognized fenced-code languages. Checkboxes are display-only (`disabled`).
 
 Content Security Policy further limits scripts, styles, frames, objects, forms,
 images, and connections to known origins.

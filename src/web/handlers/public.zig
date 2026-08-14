@@ -81,6 +81,23 @@ pub const CommentDefinition = ploof.Endpoint(.{
     }),
 });
 
+pub const EditDefinition = ploof.Endpoint(.{
+    .body = ploof.Form.typed(struct {
+        title: []const u8,
+        body: []const u8,
+        reproduction_steps: ?[]const u8 = null,
+        expected_behavior: ?[]const u8 = null,
+        actual_behavior: ?[]const u8 = null,
+        environment: ?[]const u8 = null,
+        evidence_url: ?[]const u8 = null,
+    }, .{
+        .encoded_wire_bytes_max = 64 * 1024,
+        .decoded_bytes_max = 64 * 1024,
+        .segments_max = 12,
+        .unknown_fields = .reject,
+    }),
+});
+
 pub fn home(context: *app_state.Context) app_state.Context.ResponseType {
     return renderIssueList(context, .{}, true);
 }
@@ -276,6 +293,14 @@ pub fn detail(
         viewer_voted,
     ) catch
         return context.empty(.internal_server_error);
+    if (current) |*value| {
+        if (domain.canEditIssue(value.user.role, value.user.id, issue.author_id)) {
+            writer.print(
+                "<a class=\"button button-quiet\" href=\"/issues/{d}/edit\">Edit</a>",
+                .{issue.id},
+            ) catch return context.empty(.internal_server_error);
+        }
+    }
     if (issue.evidence_url) |url| {
         if (page.looksLikeImageUrl(url)) {
             writer.writeAll("<figure class=\"evidence-figure\"><img class=\"markdown-image\" src=\"") catch
@@ -405,6 +430,160 @@ pub fn create(
     var location: [64]u8 = undefined;
     const target = std.fmt.bufPrint(&location, "/issues/{d}", .{issue_id}) catch
         return context.empty(.internal_server_error);
+    return request.redirect(context, .see_other, target);
+}
+
+pub fn editIssuePage(context: *app_state.Context) app_state.Context.ResponseType {
+    const issue_id = request.parseIssueId(context) orelse return renderNotFound(context);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    const allocator = workspace.allocator();
+    const current = (request.principal(context, allocator) catch
+        return context.empty(.service_unavailable)) orelse
+        return redirectToEditLogin(context, issue_id);
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    const issue = database.getIssue(allocator, issue_id) catch |problem| return switch (problem) {
+        error.NotFound => renderNotFound(context),
+        else => context.empty(.service_unavailable),
+    };
+    if (!domain.canEditIssue(current.user.role, current.user.id, issue.author_id)) {
+        return page.htmlFailure(
+            context,
+            .forbidden,
+            "403",
+            "Cannot edit",
+            "Only the original author or an admin can edit this feedback.",
+        );
+    }
+    return editFormResponse(
+        context,
+        &workspace,
+        &current.user,
+        issue,
+        page.issueEditValues(issue),
+        null,
+        .ok,
+    );
+}
+
+pub fn editIssueContent(
+    context: *app_state.Context,
+    input: EditDefinition.InputType,
+) app_state.Context.ResponseType {
+    const database = app_state.database(context) orelse
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Database unavailable.");
+    const issue_id = request.parseIssueId(context) orelse return renderNotFound(context);
+    var workspace = request.Workspace.init(context) catch
+        return context.empty(.service_unavailable);
+    const current = (request.principal(context, workspace.allocator()) catch
+        return context.empty(.service_unavailable)) orelse
+        return page.htmlFailure(context, .unauthorized, "401", "Sign in required", "Sign in with Discord to edit feedback.");
+    const issue = database.getIssue(workspace.allocator(), issue_id) catch |problem| return switch (problem) {
+        error.NotFound => renderNotFound(context),
+        else => context.empty(.service_unavailable),
+    };
+    if (!domain.canEditIssue(current.user.role, current.user.id, issue.author_id)) {
+        return page.htmlFailure(
+            context,
+            .forbidden,
+            "403",
+            "Cannot edit",
+            "Only the original author or an admin can edit this feedback.",
+        );
+    }
+    const form = input.body;
+    const values = page.IssueEditValues{
+        .kind = issue.kind,
+        .title = form.title,
+        .body = form.body,
+        .reproduction_steps = nonEmpty(form.reproduction_steps),
+        .expected_behavior = nonEmpty(form.expected_behavior),
+        .actual_behavior = nonEmpty(form.actual_behavior),
+        .environment = nonEmpty(form.environment),
+        .evidence_url = nonEmpty(form.evidence_url),
+    };
+    if (!(database.allowUserAction(
+        current.user.id,
+        "issue_edit",
+        10,
+        60,
+    ) catch return context.empty(.service_unavailable))) {
+        return editFormResponse(
+            context,
+            &workspace,
+            &current.user,
+            issue,
+            values,
+            "Please wait before editing again.",
+            .too_many_requests,
+        );
+    }
+    const payload = domain.CreateIssue{
+        .board_id = issue.board_id,
+        .kind = issue.kind,
+        .title = values.title,
+        .body = values.body,
+        .reproduction_steps = values.reproduction_steps,
+        .expected_behavior = values.expected_behavior,
+        .actual_behavior = values.actual_behavior,
+        .environment = values.environment,
+        .evidence_url = values.evidence_url,
+    };
+    domain.validateCreateIssue(payload) catch |err| {
+        return editFormResponse(
+            context,
+            &workspace,
+            &current.user,
+            issue,
+            values,
+            createIssueErrorMessage(err),
+            .unprocessable_entity,
+        );
+    };
+    database.editIssueContent(issue_id, current.user.id, .{
+        .title = values.title,
+        .body_markdown = values.body,
+        .reproduction_steps = values.reproduction_steps,
+        .expected_behavior = values.expected_behavior,
+        .actual_behavior = values.actual_behavior,
+        .environment = values.environment,
+        .evidence_url = values.evidence_url,
+    }) catch |problem| return switch (problem) {
+        error.Forbidden => page.htmlFailure(
+            context,
+            .forbidden,
+            "403",
+            "Cannot edit",
+            "Only the original author or an admin can edit this feedback.",
+        ),
+        error.NotFound => renderNotFound(context),
+        error.Conflict => editFormResponse(
+            context,
+            &workspace,
+            &current.user,
+            issue,
+            values,
+            "Could not save this feedback. Check the fields and try again.",
+            .unprocessable_entity,
+        ),
+        else => editFormResponse(
+            context,
+            &workspace,
+            &current.user,
+            issue,
+            values,
+            "Could not save this feedback. Try again in a moment.",
+            .service_unavailable,
+        ),
+    };
+    return redirectToIssue(context, database, workspace.allocator(), issue_id, "");
+}
+
+fn redirectToEditLogin(context: *app_state.Context, issue_id: i64) app_state.Context.ResponseType {
+    var location: [64]u8 = undefined;
+    const target = std.fmt.bufPrint(&location, "/auth/discord?return_to=/issues/{d}/edit", .{issue_id}) catch
+        return request.redirect(context, .see_other, "/auth/discord");
     return request.redirect(context, .see_other, target);
 }
 
@@ -931,7 +1110,9 @@ fn renderDiscussion(
     };
     try writer.writeAll("<form class=\"comment-form\" method=\"post\" action=\"comments\">");
     try writer.writeAll(hidden);
-    try writer.writeAll("<label for=\"comment-body\">Add to the conversation <span class=\"hint\">Markdown and ![alt](https://...) images</span></label>");
+    try writer.writeAll("<label for=\"comment-body\">Add to the conversation <span class=\"hint\">");
+    try writer.writeAll(page.markdown_hint);
+    try writer.writeAll("</span></label>");
     try writer.writeAll("<textarea id=\"comment-body\" name=\"body\" required maxlength=\"4096\" rows=\"5\"></textarea>");
     try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Post comment</button></form></section>");
@@ -1016,7 +1197,9 @@ fn renderIssueForm(
     try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" placeholder=\"A concise summary\" value=\"");
     try highlight.escapeHtml(writer, values.title);
     try writer.writeAll("\"></label>");
-    try writer.writeAll("<label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve?\">");
+    try writer.writeAll("<label>Description <span class=\"hint\">");
+    try writer.writeAll(page.markdown_hint);
+    try writer.writeAll("</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"8\" placeholder=\"What problem does this solve?\">");
     try highlight.escapeHtml(writer, values.body);
     try writer.writeAll("</textarea></label>");
     try page.imageUploadControl(writer, .markdown);
@@ -1112,6 +1295,39 @@ fn issueFormResponse(
     return response;
 }
 
+fn editFormResponse(
+    context: *app_state.Context,
+    workspace: *request.Workspace,
+    user: *const models.User,
+    issue: models.Issue,
+    values: page.IssueEditValues,
+    error_message: ?[]const u8,
+    comptime status: ploof.response.Status,
+) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Poof is not configured.");
+    const database = app_state.database(context) orelse
+        return page.htmlFailure(context, .service_unavailable, "503", "Unavailable", "Database unavailable.");
+    var csrf_token = csrf.prepare(context) catch
+        return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(workspace.allocator(), database, settings);
+    var action_buf: [64]u8 = undefined;
+    const action = std.fmt.bufPrint(&action_buf, "/issues/{d}/content", .{issue.id}) catch
+        return context.empty(.internal_server_error);
+    var cancel_buf: [256]u8 = undefined;
+    const cancel = page.issueUrl(&cancel_buf, issue.id, issue.slug) catch
+        return context.empty(.internal_server_error);
+    var writer = workspace.writer();
+    page.begin(&writer, branding, "Edit feedback", .feedback, user) catch
+        return context.empty(.internal_server_error);
+    page.issueEditForm(&writer, values, csrf_token.hiddenInput(), action, cancel, error_message) catch
+        return context.empty(.internal_server_error);
+    page.end(&writer, workspace) catch return context.empty(.internal_server_error);
+    var response = context.htmlBorrowed(status, workspace.rendered(&writer));
+    csrf.attach(&response, &csrf_token);
+    return response;
+}
+
 fn renderRoadmapColumn(
     writer: *std.Io.Writer,
     title: []const u8,
@@ -1157,6 +1373,7 @@ fn redirectToIssue(
     var base: [256]u8 = undefined;
     const url = page.issueUrl(&base, issue.id, issue.slug) catch
         return context.empty(.internal_server_error);
+    if (anchor.len == 0) return request.redirect(context, .see_other, url);
     var location: [320]u8 = undefined;
     const target = std.fmt.bufPrint(&location, "{s}#{s}", .{ url, anchor }) catch
         return context.empty(.internal_server_error);

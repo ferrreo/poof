@@ -1416,7 +1416,10 @@ select {
 
 .markdown h1,
 .markdown h2,
-.markdown h3 {
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
   margin: 1.5em 0 0.55em;
   font-style: normal;
   font-weight: 700;
@@ -1431,6 +1434,41 @@ select {
 .markdown ol {
   margin: 0 0 1em;
   padding-left: 1.5em;
+}
+
+.markdown li.task-list-item {
+  list-style: none;
+}
+
+.markdown li.task-list-item input {
+  margin: 0 0.4em 0 -1.4em;
+}
+
+.markdown table {
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.markdown th,
+.markdown td {
+  padding: 0.35em 0.6em;
+  border: var(--rule-card) solid var(--color-rule);
+  text-align: left;
+}
+
+.markdown th {
+  background: var(--color-paper-2);
+}
+
+.markdown hr {
+  margin: 1.5em 0;
+  border: 0;
+  border-top: var(--rule-card) solid var(--color-rule);
+}
+
+.markdown del {
+  color: var(--color-muted);
 }
 
 .markdown blockquote {

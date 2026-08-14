@@ -210,6 +210,10 @@ fn validateText(
     }
 }
 
+pub fn canEditIssue(role: Role, editor_id: i64, author_id: i64) bool {
+    return role == .admin or editor_id == author_id;
+}
+
 pub fn validateEvidenceUrl(value: []const u8) ValidationError!void {
     if (value.len == 0 or value.len > evidence_url_bytes_max) {
         return error.InvalidEvidenceUrl;
@@ -316,6 +320,12 @@ test "evidence URLs reject executable and credential-bearing locations" {
     try std.testing.expectError(error.InvalidEvidenceUrl, validateCreateIssue(input));
     input.evidence_url = "/media/deadbeef.png";
     try validateCreateIssue(input);
+}
+
+test "authors and admins can edit issues" {
+    try std.testing.expect(canEditIssue(.admin, 9, 3));
+    try std.testing.expect(canEditIssue(.member, 3, 3));
+    try std.testing.expect(!canEditIssue(.member, 9, 3));
 }
 
 test "slugify produces stable URL components" {

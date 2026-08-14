@@ -223,8 +223,6 @@ pub fn updateSiteSettings(
 }
 
 pub fn editIssuePage(context: *app_state.Context) app_state.Context.ResponseType {
-    const settings = app_state.config(context) orelse
-        return context.empty(.service_unavailable);
     const database = app_state.database(context) orelse
         return context.empty(.service_unavailable);
     const issue_id = request.parseIssueId(context) orelse return context.empty(.not_found);
@@ -239,17 +237,7 @@ pub fn editIssuePage(context: *app_state.Context) app_state.Context.ResponseType
         error.NotFound => context.empty(.not_found),
         else => context.empty(.service_unavailable),
     };
-    const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
-    const branding = page.resolveBranding(allocator, database, settings);
-    var writer = workspace.writer();
-    page.begin(&writer, branding, "Edit feedback", .admin, &principal.user) catch
-        return context.empty(.internal_server_error);
-    tryRenderIssueContentForm(&writer, issue, token.hiddenInput()) catch
-        return context.empty(.internal_server_error);
-    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
-    var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
-    csrf.attach(&response, &token);
-    return response;
+    return adminEditFormResponse(context, &workspace, &principal.user, issue, page.issueEditValues(issue), null, .ok);
 }
 
 pub fn editIssueContent(
@@ -265,16 +253,40 @@ pub fn editIssueContent(
         error.Forbidden => context.empty(.forbidden),
         else => context.empty(.service_unavailable),
     };
-    database.editIssueContent(issue_id, principal.user.id, .{
+    const issue = database.getIssue(workspace.allocator(), issue_id) catch |problem| return switch (problem) {
+        error.NotFound => context.empty(.not_found),
+        else => context.empty(.service_unavailable),
+    };
+    const values = page.IssueEditValues{
+        .kind = issue.kind,
         .title = input.body.title,
-        .body_markdown = input.body.body,
+        .body = input.body.body,
         .reproduction_steps = nonEmpty(input.body.reproduction_steps),
         .expected_behavior = nonEmpty(input.body.expected_behavior),
         .actual_behavior = nonEmpty(input.body.actual_behavior),
         .environment = nonEmpty(input.body.environment),
         .evidence_url = nonEmpty(input.body.evidence_url),
+    };
+    database.editIssueContent(issue_id, principal.user.id, .{
+        .title = values.title,
+        .body_markdown = values.body,
+        .reproduction_steps = values.reproduction_steps,
+        .expected_behavior = values.expected_behavior,
+        .actual_behavior = values.actual_behavior,
+        .environment = values.environment,
+        .evidence_url = values.evidence_url,
     }) catch |problem| return switch (problem) {
-        error.Conflict => page.htmlFailure(context, .unprocessable_entity, "422", "Invalid content", "Issue content is invalid."),
+        error.Conflict => adminEditFormResponse(
+            context,
+            &workspace,
+            &principal.user,
+            issue,
+            values,
+            "Issue content is invalid.",
+            .unprocessable_entity,
+        ),
+        error.NotFound => context.empty(.not_found),
+        error.Forbidden => context.empty(.forbidden),
         else => context.empty(.service_unavailable),
     };
     var target: [256]u8 = undefined;
@@ -612,36 +624,33 @@ fn renderBoards(
     try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Add board</button></form></section>");
 }
 
-fn tryRenderIssueContentForm(
-    writer: *std.Io.Writer,
+fn adminEditFormResponse(
+    context: *app_state.Context,
+    workspace: *request.Workspace,
+    user: *const models.User,
     issue: models.Issue,
-    csrf_input: []const u8,
-) !void {
-    try writer.writeAll("<section class=\"form-page\"><div><h1>Edit feedback</h1><p>Changes are recorded in the issue activity history.</p></div>");
-    try writer.print("<form class=\"stacked-form\" method=\"post\" action=\"/admin/issues/{d}/content\">", .{issue.id});
-    try writer.writeAll(csrf_input);
-    try writer.writeAll("<label>Title<input name=\"title\" required minlength=\"5\" maxlength=\"160\" value=\"");
-    try highlight.escapeHtml(writer, issue.title);
-    try writer.writeAll("\"></label><label>Description <span class=\"hint\">Markdown, code fences, and ![alt](https://...) images</span><textarea name=\"body\" required minlength=\"20\" maxlength=\"16384\" rows=\"10\">");
-    try highlight.escapeHtml(writer, issue.body_markdown);
-    try writer.writeAll("</textarea></label>");
-    try page.imageUploadControl(writer, .markdown);
-    if (issue.kind == .bug) {
-        try writer.writeAll("<div class=\"form-row\"><label>Steps to reproduce<textarea name=\"reproduction_steps\" required maxlength=\"8192\" rows=\"5\">");
-        try optionalText(writer, issue.reproduction_steps);
-        try writer.writeAll("</textarea></label><label>Actual behavior<textarea name=\"actual_behavior\" required maxlength=\"8192\" rows=\"5\">");
-        try optionalText(writer, issue.actual_behavior);
-        try writer.writeAll("</textarea></label></div><div class=\"form-row\"><label>Expected behavior<textarea name=\"expected_behavior\" maxlength=\"8192\" rows=\"4\">");
-        try optionalText(writer, issue.expected_behavior);
-        try writer.writeAll("</textarea></label><label>Environment<textarea name=\"environment\" maxlength=\"8192\" rows=\"4\">");
-        try optionalText(writer, issue.environment);
-        try writer.writeAll("</textarea></label></div>");
-    }
-    try writer.writeAll("<div class=\"upload-field\"><label>Evidence image or URL <span class=\"hint\">optional — upload a PNG/JPEG/GIF/WebP or paste an https link</span><input type=\"text\" inputmode=\"url\" name=\"evidence_url\" maxlength=\"512\" value=\"");
-    try optionalText(writer, issue.evidence_url);
-    try writer.writeAll("\"></label>");
-    try page.imageUploadControl(writer, .url);
-    try writer.writeAll("</div><div class=\"form-actions\"><a class=\"button button-quiet\" href=\"/admin\">Cancel</a><button class=\"button button-primary\" type=\"submit\">Save changes</button></div></form></section>");
+    values: page.IssueEditValues,
+    error_message: ?[]const u8,
+    comptime status: ploof.response.Status,
+) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse
+        return context.empty(.service_unavailable);
+    const database = app_state.database(context) orelse
+        return context.empty(.service_unavailable);
+    const token = csrf.prepare(context) catch return context.empty(.internal_server_error);
+    const branding = page.resolveBranding(workspace.allocator(), database, settings);
+    var action_buf: [64]u8 = undefined;
+    const action = std.fmt.bufPrint(&action_buf, "/admin/issues/{d}/content", .{issue.id}) catch
+        return context.empty(.internal_server_error);
+    var writer = workspace.writer();
+    page.begin(&writer, branding, "Edit feedback", .admin, user) catch
+        return context.empty(.internal_server_error);
+    page.issueEditForm(&writer, values, token.hiddenInput(), action, "/admin", error_message) catch
+        return context.empty(.internal_server_error);
+    page.end(&writer, workspace) catch return context.empty(.internal_server_error);
+    var response = context.htmlBorrowed(status, workspace.rendered(&writer));
+    csrf.attach(&response, &token);
+    return response;
 }
 
 fn renderBranding(
@@ -716,7 +725,9 @@ fn renderChangelogs(
     try writer.writeAll("<div class=\"form-row\"><label>Version<input name=\"version\" maxlength=\"64\" placeholder=\"1.0.0\"></label><label>Tags<input name=\"tags\" maxlength=\"300\" placeholder=\"new-feature, improvement\"></label></div>");
     try writer.writeAll("<label>Completed issue IDs <span class=\"hint\">optional, comma separated</span><input name=\"issue_ids\" maxlength=\"500\" placeholder=\"42, 57\"></label>");
     try writer.writeAll("<label>Summary<input name=\"summary\" required maxlength=\"500\"></label>");
-    try writer.writeAll("<label>Release notes <span class=\"hint\">Markdown, fenced code, and ![alt](https://...) images</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"10\" placeholder=\"What shipped?\"></textarea></label>");
+    try writer.writeAll("<label>Release notes <span class=\"hint\">");
+    try writer.writeAll(page.markdown_hint);
+    try writer.writeAll("</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"10\" placeholder=\"What shipped?\"></textarea></label>");
     try page.imageUploadControl(writer, .markdown);
     try writer.writeAll("<div class=\"form-actions\"><button class=\"button button-primary\" type=\"submit\">Save draft</button></div></form></section>");
 }
@@ -746,7 +757,9 @@ fn renderChangelogEditForm(
     }
     try writer.writeAll("\"></label><label>Summary<input name=\"summary\" required maxlength=\"500\" value=\"");
     try highlight.escapeHtml(writer, entry.summary);
-    try writer.writeAll("\"></label><label>Release notes <span class=\"hint\">Markdown, fenced code, and ![alt](https://...) images</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"12\">");
+    try writer.writeAll("\"></label><label>Release notes <span class=\"hint\">");
+    try writer.writeAll(page.markdown_hint);
+    try writer.writeAll("</span><textarea name=\"body\" required maxlength=\"65536\" rows=\"12\">");
     try highlight.escapeHtml(writer, entry.body_markdown);
     try writer.writeAll("</textarea></label>");
     try page.imageUploadControl(writer, .markdown);

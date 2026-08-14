@@ -313,6 +313,20 @@ test "PostgreSQL migrations and feedback lifecycle" {
         "portable-json-exports-for-self-hosters",
         edited.slug,
     );
+    try database.editIssueContent(issue_id, member.id, .{
+        .title = "Portable JSON exports for self-hosters",
+        .body_markdown = "Authors can revise the write-up after an admin already saved a change.",
+    });
+    const admin_owned = try database.createIssue(admin.id, .{
+        .board_id = boards[0].id,
+        .kind = .feature,
+        .title = "Admin-only notes for later",
+        .body = "This write-up belongs to an administrator account.",
+    });
+    try std.testing.expectError(error.Forbidden, database.editIssueContent(admin_owned, member.id, .{
+        .title = "Hijack attempt title!!",
+        .body_markdown = "A member should not be able to edit someone else's issue.",
+    }));
     const duplicate_target = try database.createIssue(member.id, .{
         .board_id = boards[0].id,
         .kind = .improvement,

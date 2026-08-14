@@ -1032,6 +1032,20 @@ pub const Postgres = struct {
         defer connection.release();
         connection.begin() catch return error.DatabaseUnavailable;
         errdefer connection.tryRollback() catch {};
+        var actor_row = (connection.row(
+            "SELECT role FROM users WHERE id = $1 AND disabled = false",
+            .{actor_id},
+        ) catch return error.DatabaseUnavailable) orelse return error.Forbidden;
+        const role = try models.parseRole(actor_row.get([]const u8, 0) catch
+            return error.InvalidDatabaseData);
+        actor_row.deinit() catch return error.DatabaseUnavailable;
+        var issue_row = (connection.row(
+            "SELECT author_id FROM issues WHERE id = $1 FOR UPDATE",
+            .{issue_id},
+        ) catch return error.DatabaseUnavailable) orelse return error.NotFound;
+        const author_id = issue_row.get(i64, 0) catch return error.InvalidDatabaseData;
+        issue_row.deinit() catch return error.DatabaseUnavailable;
+        if (!domain.canEditIssue(role, actor_id, author_id)) return error.Forbidden;
         const affected = connection.exec(
             \\UPDATE issues SET
             \\    slug = $2, title = $3, body_markdown = $4,
