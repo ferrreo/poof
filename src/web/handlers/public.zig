@@ -46,6 +46,8 @@ const RoadmapQuery = struct {
     completed_page: u16 = 1,
 };
 
+const RoadmapColumn = enum { planned, progress, completed };
+
 pub const RoadmapDefinition = ploof.Endpoint(.{
     .query = ploof.Query.typed(RoadmapQuery, .{
         .segments_max = 6,
@@ -1549,7 +1551,7 @@ fn renderRoadmapColumn(
     title: []const u8,
     result: models.ListResult,
     query: RoadmapQuery,
-    column: enum { planned, progress, completed },
+    column: RoadmapColumn,
     page_number: u16,
 ) !void {
     try writer.writeAll("<div class=\"roadmap-column\"><header><h2>");
@@ -1597,7 +1599,7 @@ fn renderRoadmapColumn(
 fn writeRoadmapHref(
     writer: *std.Io.Writer,
     query: RoadmapQuery,
-    column: enum { planned, progress, completed },
+    column: RoadmapColumn,
     target_page: u16,
 ) !void {
     try writer.print("/roadmap?planned_page={d}&progress_page={d}&completed_page={d}", .{
