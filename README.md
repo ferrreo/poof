@@ -12,7 +12,8 @@ the exact same domain rules.
 - **Feedback and issue reporting** — feature, improvement, and structured bug
   forms with voting, Markdown, comments, replies, boards, projects, priorities, duplicate
   tracking, and locking.
-- **Automatic public roadmap** — Planned, In Progress, and recently Completed
+- **Automatic public roadmap** — Pending, Reviewing, Planned, In Progress, and
+  recently Completed columns, generated from issue status.
   columns are queries over the issue tracker, never a second stale data source.
 - **Connected changelog** — Markdown release notes, drafts, publication state,
   versions, and zhl-highlighted code fences.

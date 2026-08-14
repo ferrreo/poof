@@ -55,6 +55,7 @@ pub fn begin(
     try writer.writeAll(
         "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
     );
+    try writer.print("<link rel=\"stylesheet\" href=\"{s}\">", .{css_path});
     try writer.writeAll("<meta name=\"color-scheme\" content=\"");
     try writer.writeAll(switch (scheme) {
         .system => "light dark",
@@ -67,7 +68,6 @@ pub fn begin(
     try writer.writeAll(" — ");
     try highlight.escapeHtml(writer, branding.company_name);
     try writer.writeAll("</title>");
-    try writer.print("<link rel=\"stylesheet\" href=\"{s}\">", .{css_path});
     try writer.print("<script src=\"{s}\" defer></script>", .{javascript_path});
     if (branding.logo_url) |logo| {
         try writer.writeAll("<link rel=\"icon\" href=\"");

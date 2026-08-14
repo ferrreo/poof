@@ -133,23 +133,30 @@ pub fn dashboard(
         error.Forbidden => context.empty(.forbidden),
         else => context.empty(.service_unavailable),
     };
-    var issue_storage: [domain.list_page_size]models.IssueSummary = undefined;
     const query = input.query;
-    const issues = database.listIssues(allocator, .{
-        .query = query.q,
-        .status = switch (query.status) {
-            .all => null,
-            .pending => .pending,
-            .reviewing => .reviewing,
-            .planned => .planned,
-            .in_progress => .in_progress,
-            .completed => .completed,
-            .closed => .closed,
-        },
-        .limit = domain.list_page_size,
-        .offset = (@as(u32, @max(query.page, 1)) - 1) * domain.list_page_size,
-    }, &issue_storage) catch
-        return context.empty(.service_unavailable);
+    const statuses = comptime std.meta.tags(domain.IssueStatus);
+    var grouped_storage: [domain.group_preview_size * statuses.len]models.IssueSummary = undefined;
+    var grouped_results: [statuses.len]models.ListResult = undefined;
+    var issue_storage: [domain.list_page_size]models.IssueSummary = undefined;
+    var issues: models.ListResult = .{ .items = &.{}, .total = 0 };
+    if (query.status == .all) {
+        inline for (statuses, 0..) |status, index| {
+            const slice = grouped_storage[index * domain.group_preview_size ..][0..domain.group_preview_size];
+            grouped_results[index] = database.listIssues(allocator, .{
+                .query = query.q,
+                .status = status,
+                .limit = domain.group_preview_size,
+            }, slice) catch return context.empty(.service_unavailable);
+            issues.total += grouped_results[index].total;
+        }
+    } else {
+        issues = database.listIssues(allocator, .{
+            .query = query.q,
+            .status = dashboardStatus(query),
+            .limit = domain.list_page_size,
+            .offset = (@as(u32, @max(query.page, 1)) - 1) * domain.list_page_size,
+        }, &issue_storage) catch return context.empty(.service_unavailable);
+    }
     var board_storage: [32]models.Board = undefined;
     const boards = database.listBoards(allocator, &board_storage, true) catch
         return context.empty(.service_unavailable);
@@ -180,7 +187,15 @@ pub fn dashboard(
         return context.empty(.internal_server_error);
     renderBranding(&writer, branding, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
-    renderIssues(&writer, issues, boards, projects, token.hiddenInput(), query) catch
+    renderIssues(
+        &writer,
+        if (query.status == .all) grouped_results[0..] else null,
+        issues,
+        boards,
+        projects,
+        token.hiddenInput(),
+        query,
+    ) catch
         return context.empty(.internal_server_error);
     renderBoards(&writer, boards, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -607,9 +622,22 @@ fn adminPrincipal(
     return principal;
 }
 
+fn dashboardStatus(query: DashboardQuery) ?domain.IssueStatus {
+    return switch (query.status) {
+        .all => null,
+        .pending => .pending,
+        .reviewing => .reviewing,
+        .planned => .planned,
+        .in_progress => .in_progress,
+        .completed => .completed,
+        .closed => .closed,
+    };
+}
+
 fn renderIssues(
     writer: *std.Io.Writer,
-    result: models.ListResult,
+    groups: ?[]const models.ListResult,
+    flat: models.ListResult,
     boards: []const models.Board,
     projects: []const models.Project,
     csrf_input: []const u8,
@@ -627,90 +655,156 @@ fn renderIssues(
         });
     }
     try writer.writeAll("</select><button class=\"button button-quiet\" type=\"submit\">Filter</button></form>");
+    if (groups) |results| {
+        try renderGroupedAdminIssues(writer, results, boards, projects, csrf_input, query);
+    } else {
+        try renderFlatAdminIssues(writer, flat, boards, projects, csrf_input, query);
+    }
+    try writer.writeAll("</section>");
+}
+
+fn renderGroupedAdminIssues(
+    writer: *std.Io.Writer,
+    results: []const models.ListResult,
+    boards: []const models.Board,
+    projects: []const models.Project,
+    csrf_input: []const u8,
+    query: DashboardQuery,
+) !void {
+    const statuses = comptime std.meta.tags(domain.IssueStatus);
+    var rendered: usize = 0;
+    try writer.writeAll("<div class=\"status-groups\">");
+    for (statuses, results) |status, result| {
+        if (result.total == 0) continue;
+        if (rendered == 0) {
+            try writer.writeAll("<div class=\"group-controls\">");
+            try writer.writeAll("<button type=\"button\" class=\"button button-quiet\" data-groups=\"expand\">Expand all</button>");
+            try writer.writeAll("<button type=\"button\" class=\"button button-quiet\" data-groups=\"collapse\">Collapse all</button>");
+            try writer.writeAll("</div>");
+        }
+        rendered += 1;
+        try writer.writeAll("<details class=\"status-group\"");
+        if (status.groupOpenByDefault()) try writer.writeAll(" open");
+        try writer.writeAll("><summary>");
+        try page.statusBadge(writer, status);
+        try writer.print("<span class=\"status-count\">{d}</span></summary>", .{result.total});
+        try writer.writeAll("<div class=\"admin-list\">");
+        for (result.items) |issue| try renderAdminIssue(writer, issue, boards, projects, csrf_input);
+        try writer.writeAll("</div>");
+        if (result.total > @as(i64, @intCast(result.items.len))) {
+            try writer.writeAll("<p class=\"status-group-more\"><a class=\"text-link\" href=\"");
+            try writeAdminIssuesHref(writer, query, 1, @tagName(status));
+            try writer.print("\">Show all {d}</a></p>", .{result.total});
+        }
+        try writer.writeAll("</details>");
+    }
+    if (rendered == 0) {
+        try writer.writeAll("<p class=\"notice\">No feedback needs triage.</p>");
+    }
+    try writer.writeAll("</div>");
+}
+
+fn renderFlatAdminIssues(
+    writer: *std.Io.Writer,
+    result: models.ListResult,
+    boards: []const models.Board,
+    projects: []const models.Project,
+    csrf_input: []const u8,
+    query: DashboardQuery,
+) !void {
     if (result.items.len == 0) {
-        try writer.writeAll("<p class=\"notice\">No feedback needs triage.</p></section>");
+        try writer.writeAll("<p class=\"notice\">No feedback needs triage.</p>");
         return;
     }
     try writer.writeAll("<div class=\"admin-list\">");
-    for (result.items) |issue| {
-        try writer.print("<form class=\"admin-issue\" method=\"post\" action=\"/admin/issues/{d}\">", .{issue.id});
-        try writer.writeAll(csrf_input);
-        try writer.writeAll("<div class=\"admin-issue-title\"><strong>");
-        try highlight.escapeHtml(writer, issue.title);
-        try writer.print("</strong><span>#{d} · {d} votes</span>", .{ issue.id, issue.vote_count });
-        try page.priorityBadge(writer, issue.priority);
-        try writer.writeAll("</div>");
-        try writer.writeAll("<label>Status<select name=\"status\">");
-        inline for (std.meta.tags(domain.IssueStatus)) |status| {
-            try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
-                @tagName(status),
-                if (issue.status == status) " selected" else "",
-                status.label(),
-            });
-        }
-        try writer.writeAll("</select></label><label>Priority<select name=\"priority\">");
-        inline for (std.meta.tags(domain.Priority)) |priority| {
-            try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
-                @tagName(priority),
-                if (issue.priority == priority) " selected" else "",
-                priority.label(),
-            });
-        }
-        try writer.writeAll("</select></label><label>Board<select name=\"board_id\">");
-        for (boards) |board| {
-            if (board.archived) continue;
-            try writer.print("<option value=\"{d}\"{s}>", .{
-                board.id,
-                if (issue.board_id == board.id) " selected" else "",
-            });
-            try highlight.escapeHtml(writer, board.name);
-            try writer.writeAll("</option>");
-        }
-        try writer.writeAll("</select></label>");
-        try writer.writeAll("<label>Project<select name=\"project_id\"><option value=\"0\">None</option>");
-        for (projects) |project| {
-            if (project.archived and issue.project_id != project.id) continue;
-            try writer.print("<option value=\"{d}\"{s}>", .{
-                project.id,
-                if (issue.project_id == project.id) " selected" else "",
-            });
-            try highlight.escapeHtml(writer, project.name);
-            try writer.writeAll("</option>");
-        }
-        try writer.print("</select></label><label class=\"check\">Pin<input type=\"checkbox\" name=\"pinned\" value=\"true\"{s}></label>", .{
-            if (issue.pinned) " checked" else "",
-        });
-        try writer.print("<label class=\"check\">Lock<input type=\"checkbox\" name=\"locked\" value=\"true\"{s}></label>", .{
-            if (issue.locked) " checked" else "",
-        });
-        try writer.writeAll("<label>Duplicate of<input type=\"number\" name=\"duplicate_of_id\" min=\"1\" value=\"");
-        if (issue.duplicate_of_id) |target| try writer.print("{d}", .{target});
-        try writer.writeAll("\"></label>");
-        try writer.writeAll("<div class=\"admin-row-actions\">");
-        try writer.print("<a class=\"button button-quiet\" href=\"/admin/issues/{d}/edit\">Edit</a>", .{issue.id});
-        try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Save</button></div></form>");
-    }
+    for (result.items) |issue| try renderAdminIssue(writer, issue, boards, projects, csrf_input);
     try writer.writeAll("</div><nav class=\"pagination\" aria-label=\"Admin feedback pages\">");
     const page_number = @max(query.page, 1);
     if (page_number > 1) {
         try writer.writeAll("<a class=\"button button-quiet\" href=\"");
-        try writeAdminIssuesHref(writer, query, page_number - 1);
+        try writeAdminIssuesHref(writer, query, page_number - 1, @tagName(query.status));
         try writer.writeAll("\">← Previous</a>");
     }
     if (@as(i64, page_number) * domain.list_page_size < result.total) {
         try writer.writeAll("<a class=\"button button-quiet\" href=\"");
-        try writeAdminIssuesHref(writer, query, page_number + 1);
+        try writeAdminIssuesHref(writer, query, page_number + 1, @tagName(query.status));
         try writer.writeAll("\">Next →</a>");
     }
-    try writer.writeAll("</nav></section>");
+    try writer.writeAll("</nav>");
+}
+
+fn renderAdminIssue(
+    writer: *std.Io.Writer,
+    issue: models.IssueSummary,
+    boards: []const models.Board,
+    projects: []const models.Project,
+    csrf_input: []const u8,
+) !void {
+    try writer.print("<form class=\"admin-issue\" method=\"post\" action=\"/admin/issues/{d}\">", .{issue.id});
+    try writer.writeAll(csrf_input);
+    try writer.writeAll("<div class=\"admin-issue-title\"><strong>");
+    try highlight.escapeHtml(writer, issue.title);
+    try writer.print("</strong><span>#{d} · {d} votes</span>", .{ issue.id, issue.vote_count });
+    try page.priorityBadge(writer, issue.priority);
+    try writer.writeAll("</div>");
+    try writer.writeAll("<label>Status<select name=\"status\">");
+    inline for (std.meta.tags(domain.IssueStatus)) |status| {
+        try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
+            @tagName(status),
+            if (issue.status == status) " selected" else "",
+            status.label(),
+        });
+    }
+    try writer.writeAll("</select></label><label>Priority<select name=\"priority\">");
+    inline for (std.meta.tags(domain.Priority)) |priority| {
+        try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
+            @tagName(priority),
+            if (issue.priority == priority) " selected" else "",
+            priority.label(),
+        });
+    }
+    try writer.writeAll("</select></label><label>Board<select name=\"board_id\">");
+    for (boards) |board| {
+        if (board.archived) continue;
+        try writer.print("<option value=\"{d}\"{s}>", .{
+            board.id,
+            if (issue.board_id == board.id) " selected" else "",
+        });
+        try highlight.escapeHtml(writer, board.name);
+        try writer.writeAll("</option>");
+    }
+    try writer.writeAll("</select></label>");
+    try writer.writeAll("<label>Project<select name=\"project_id\"><option value=\"0\">None</option>");
+    for (projects) |project| {
+        if (project.archived and issue.project_id != project.id) continue;
+        try writer.print("<option value=\"{d}\"{s}>", .{
+            project.id,
+            if (issue.project_id == project.id) " selected" else "",
+        });
+        try highlight.escapeHtml(writer, project.name);
+        try writer.writeAll("</option>");
+    }
+    try writer.print("</select></label><label class=\"check\">Pin<input type=\"checkbox\" name=\"pinned\" value=\"true\"{s}></label>", .{
+        if (issue.pinned) " checked" else "",
+    });
+    try writer.print("<label class=\"check\">Lock<input type=\"checkbox\" name=\"locked\" value=\"true\"{s}></label>", .{
+        if (issue.locked) " checked" else "",
+    });
+    try writer.writeAll("<label>Duplicate of<input type=\"number\" name=\"duplicate_of_id\" min=\"1\" value=\"");
+    if (issue.duplicate_of_id) |target| try writer.print("{d}", .{target});
+    try writer.writeAll("\"></label>");
+    try writer.writeAll("<div class=\"admin-row-actions\">");
+    try writer.print("<a class=\"button button-quiet\" href=\"/admin/issues/{d}/edit\">Edit</a>", .{issue.id});
+    try writer.writeAll("<button class=\"button button-primary\" type=\"submit\">Save</button></div></form>");
 }
 
 fn writeAdminIssuesHref(
     writer: *std.Io.Writer,
     query: DashboardQuery,
     target_page: u16,
+    status: []const u8,
 ) !void {
-    try writer.print("/admin?page={d}&status={s}", .{ target_page, @tagName(query.status) });
+    try writer.print("/admin?page={d}&status={s}", .{ target_page, status });
     if (query.q) |value| {
         try writer.writeAll("&q=");
         try page.writeQueryComponent(writer, value);

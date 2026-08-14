@@ -48,10 +48,7 @@ pub const IssueStatus = enum {
     }
 
     pub fn appearsOnRoadmap(self: IssueStatus) bool {
-        return switch (self) {
-            .planned, .in_progress, .completed => true,
-            .pending, .reviewing, .closed => false,
-        };
+        return self != .closed;
     }
 
     pub fn groupOpenByDefault(self: IssueStatus) bool {
@@ -283,10 +280,11 @@ pub fn slugify(input: []const u8, output: []u8) error{NoSpaceLeft}![]const u8 {
 const whitespace = " \t\r\n";
 
 test "roadmap statuses are explicit" {
+    try std.testing.expect(IssueStatus.pending.appearsOnRoadmap());
+    try std.testing.expect(IssueStatus.reviewing.appearsOnRoadmap());
     try std.testing.expect(IssueStatus.planned.appearsOnRoadmap());
     try std.testing.expect(IssueStatus.in_progress.appearsOnRoadmap());
     try std.testing.expect(IssueStatus.completed.appearsOnRoadmap());
-    try std.testing.expect(!IssueStatus.pending.appearsOnRoadmap());
     try std.testing.expect(!IssueStatus.closed.appearsOnRoadmap());
     try std.testing.expect(IssueStatus.pending.groupOpenByDefault());
     try std.testing.expect(!IssueStatus.completed.groupOpenByDefault());

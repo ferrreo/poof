@@ -531,6 +531,8 @@ test "Ploof public routes render persisted feedback" {
 
     const roadmap = try client.get("/roadmap");
     try std.testing.expectEqual(@as(u16, 200), roadmap.status);
+    try std.testing.expect(std.mem.indexOf(u8, roadmap.body, "Pending") != null);
+    try std.testing.expect(std.mem.indexOf(u8, roadmap.body, "Reviewing") != null);
     try std.testing.expect(std.mem.indexOf(u8, roadmap.body, "Recently completed") != null);
 
     const canonical = try client.get("/issues/1");

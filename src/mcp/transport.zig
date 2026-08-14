@@ -391,7 +391,13 @@ fn callTool(
         try requireFields(arguments, &.{});
         try protocol.writeToolText(writer, "Roadmap loaded.");
         try writer.writeAll(",\"structuredContent\":{");
-        inline for (.{ domain.IssueStatus.planned, .in_progress, .completed }, 0..) |status, section| {
+        inline for (.{
+            domain.IssueStatus.pending,
+            .reviewing,
+            .planned,
+            .in_progress,
+            .completed,
+        }, 0..) |status, section| {
             if (section != 0) try writer.writeByte(',');
             try protocol.writeJsonString(writer, @tagName(status));
             try writer.writeAll(":[");

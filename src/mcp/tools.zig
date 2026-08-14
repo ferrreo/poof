@@ -45,7 +45,7 @@ pub const all = [_]Tool{
     },
     .{
         .name = "poof_get_roadmap",
-        .description = "List planned, in-progress, and completed roadmap feedback.",
+        .description = "List pending, reviewing, planned, in-progress, and completed roadmap feedback.",
         .scope = .read,
         .schema = empty_schema,
     },

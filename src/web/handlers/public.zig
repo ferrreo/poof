@@ -41,16 +41,18 @@ pub const ChangelogDefinition = ploof.Endpoint(.{
 });
 
 const RoadmapQuery = struct {
+    pending_page: u16 = 1,
+    reviewing_page: u16 = 1,
     planned_page: u16 = 1,
     progress_page: u16 = 1,
     completed_page: u16 = 1,
 };
 
-const RoadmapColumn = enum { planned, progress, completed };
+const RoadmapColumn = enum { pending, reviewing, planned, progress, completed };
 
 pub const RoadmapDefinition = ploof.Endpoint(.{
     .query = ploof.Query.typed(RoadmapQuery, .{
-        .segments_max = 6,
+        .segments_max = 10,
         .unknown_fields = .reject,
     }),
 });
@@ -794,12 +796,26 @@ pub fn roadmap(
     const current = request.principal(context, allocator) catch
         return context.empty(.service_unavailable);
     const query = input.query;
+    const pending_page = @max(query.pending_page, 1);
+    const reviewing_page = @max(query.reviewing_page, 1);
     const planned_page = @max(query.planned_page, 1);
     const progress_page = @max(query.progress_page, 1);
     const completed_page = @max(query.completed_page, 1);
+    var pending_storage: [domain.list_page_size]models.IssueSummary = undefined;
+    var reviewing_storage: [domain.list_page_size]models.IssueSummary = undefined;
     var planned_storage: [domain.list_page_size]models.IssueSummary = undefined;
     var progress_storage: [domain.list_page_size]models.IssueSummary = undefined;
     var completed_storage: [domain.list_page_size]models.IssueSummary = undefined;
+    const pending = database.listIssues(allocator, .{
+        .status = .pending,
+        .limit = domain.list_page_size,
+        .offset = (@as(u32, pending_page) - 1) * domain.list_page_size,
+    }, &pending_storage) catch return context.empty(.service_unavailable);
+    const reviewing = database.listIssues(allocator, .{
+        .status = .reviewing,
+        .limit = domain.list_page_size,
+        .offset = (@as(u32, reviewing_page) - 1) * domain.list_page_size,
+    }, &reviewing_storage) catch return context.empty(.service_unavailable);
     const planned = database.listIssues(allocator, .{
         .status = .planned,
         .limit = domain.list_page_size,
@@ -829,9 +845,13 @@ pub fn roadmap(
     ) catch return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"page-heading\">") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>Roadmap</h1><p>Planned, in progress, and recently completed. These columns query the issue tracker.</p></section>") catch
+    writer.writeAll("<h1>Roadmap</h1><p>Pending, reviewing, planned, in progress, and recently completed. These columns query the issue tracker.</p></section>") catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"roadmap-grid\">") catch
+        return context.empty(.internal_server_error);
+    renderRoadmapColumn(&writer, "Pending", pending, query, .pending, pending_page) catch
+        return context.empty(.internal_server_error);
+    renderRoadmapColumn(&writer, "Reviewing", reviewing, query, .reviewing, reviewing_page) catch
         return context.empty(.internal_server_error);
     renderRoadmapColumn(&writer, "Planned", planned, query, .planned, planned_page) catch
         return context.empty(.internal_server_error);
@@ -1605,11 +1625,16 @@ fn writeRoadmapHref(
     column: RoadmapColumn,
     target_page: u16,
 ) !void {
-    try writer.print("/roadmap?planned_page={d}&progress_page={d}&completed_page={d}", .{
-        if (column == .planned) target_page else @max(query.planned_page, 1),
-        if (column == .progress) target_page else @max(query.progress_page, 1),
-        if (column == .completed) target_page else @max(query.completed_page, 1),
-    });
+    try writer.print(
+        "/roadmap?pending_page={d}&reviewing_page={d}&planned_page={d}&progress_page={d}&completed_page={d}",
+        .{
+            if (column == .pending) target_page else @max(query.pending_page, 1),
+            if (column == .reviewing) target_page else @max(query.reviewing_page, 1),
+            if (column == .planned) target_page else @max(query.planned_page, 1),
+            if (column == .progress) target_page else @max(query.progress_page, 1),
+            if (column == .completed) target_page else @max(query.completed_page, 1),
+        },
+    );
 }
 
 fn redirectToIssue(
