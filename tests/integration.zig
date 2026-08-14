@@ -528,6 +528,10 @@ test "Ploof public routes render persisted feedback" {
         "nosniff",
         home.header("x-content-type-options").?,
     );
+    try std.testing.expect(std.mem.indexOf(u8, home.body, poof.page.view_transition_css) != null);
+    try std.testing.expect(std.mem.indexOf(u8, home.body, "id=\"site-footer\"") != null);
+    const csp = home.header("content-security-policy").?;
+    try std.testing.expect(std.mem.indexOf(u8, csp, "sha256-") != null);
 
     const roadmap = try client.get("/roadmap");
     try std.testing.expectEqual(@as(u16, 200), roadmap.status);

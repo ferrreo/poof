@@ -11,6 +11,18 @@ const request = @import("request.zig");
 pub const css_path = assetPath("app.css");
 pub const javascript_path = assetPath("app.js");
 
+/// Chrome often checks this before external CSS. Keep it inline in <head>.
+pub const view_transition_css =
+    "@media (prefers-reduced-motion: no-preference){@view-transition{navigation:auto}}";
+
+pub const view_transition_style_hash: [44]u8 = blk: {
+    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(view_transition_css, &digest, .{});
+    var encoded: [44]u8 = undefined;
+    _ = std.base64.standard.Encoder.encode(&encoded, &digest);
+    break :blk encoded;
+};
+
 pub fn resolveBranding(
     allocator: std.mem.Allocator,
     database: anytype,
@@ -55,14 +67,19 @@ pub fn begin(
     try writer.writeAll(
         "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
     );
-    try writer.print("<link rel=\"stylesheet\" href=\"{s}\">", .{css_path});
     try writer.writeAll("<meta name=\"color-scheme\" content=\"");
     try writer.writeAll(switch (scheme) {
         .system => "light dark",
         .light => "light",
         .dark => "dark",
     });
-    try writer.writeAll("\">");
+    try writer.writeAll("\"><style>");
+    try writer.writeAll(view_transition_css);
+    try writer.writeAll("</style>");
+    try writer.print(
+        "<link rel=\"stylesheet\" href=\"{s}\" blocking=\"render\"><link rel=\"expect\" href=\"#site-footer\" blocking=\"render\">",
+        .{css_path},
+    );
     try writer.writeAll("<title>");
     try highlight.escapeHtml(writer, title);
     try writer.writeAll(" — ");
@@ -120,7 +137,7 @@ pub fn begin(
 
 pub fn end(writer: *std.Io.Writer, workspace: *const request.Workspace) std.Io.Writer.Error!void {
     try writer.writeAll(
-        "</main><footer><p class=\"colophon\">Free, open-source feedback software for one company. BSD-3-Clause. Zig, Ploof, zhl, PostgreSQL.</p>",
+        "</main><footer id=\"site-footer\"><p class=\"colophon\">Free, open-source feedback software for one company. BSD-3-Clause. Zig, Ploof, zhl, PostgreSQL.</p>",
     );
     try writeRenderTime(writer, workspace.elapsedNs());
     try writer.writeAll("<a href=\"/settings/developer/tokens\">MCP tokens</a></footer></body></html>");
