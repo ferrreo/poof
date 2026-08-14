@@ -298,7 +298,7 @@ pub fn detail(
             .{ target, target },
         ) catch return context.empty(.internal_server_error);
     }
-    writer.writeAll("</header><div class=\"issue-layout\"><div>") catch
+    writer.writeAll("</header><div class=\"issue-layout list-scroll\"><div>") catch
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"card markdown\">") catch
         return context.empty(.internal_server_error);
@@ -751,10 +751,10 @@ pub fn me(
     writer.writeAll("<button class=\"button button-quiet\" type=\"submit\">Sign out</button></form></div></header>") catch
         return context.empty(.internal_server_error);
     if (issues.items.len == 0) {
-        writer.writeAll("<div class=\"empty-card\"><h2>No activity yet.</h2><p>File or vote on an item to see it here.</p></div>") catch
+        writer.writeAll("<div class=\"list-scroll\"><div class=\"empty-card\"><h2>No activity yet.</h2><p>File or vote on an item to see it here.</p></div></div>") catch
             return context.empty(.internal_server_error);
     } else {
-        writer.writeAll("<div class=\"issue-list\">") catch
+        writer.writeAll("<div class=\"list-scroll issue-list\">") catch
             return context.empty(.internal_server_error);
         for (issues.items) |issue| renderIssueCard(&writer, issue) catch
             return context.empty(.internal_server_error);
@@ -882,14 +882,14 @@ pub fn changelog(
     writer.writeAll("<h1>Release notes</h1><p>Published updates, newest first.</p></section>") catch
         return context.empty(.internal_server_error);
     if (entries.len == 0) {
-        writer.writeAll("<section class=\"empty-card\"><h2>No releases yet.</h2><p>Drafts stay off this page until they are published.</p></section>") catch
+        writer.writeAll("<section class=\"empty-card list-scroll\"><h2>No releases yet.</h2><p>Drafts stay off this page until they are published.</p></section>") catch
             return context.empty(.internal_server_error);
     } else {
-        writer.writeAll("<section class=\"changelog-list\">") catch
+        writer.writeAll("<section class=\"changelog-list\"><div class=\"list-scroll\">") catch
             return context.empty(.internal_server_error);
         for (entries) |entry| renderChangelogCard(&writer, entry) catch
             return context.empty(.internal_server_error);
-        writer.writeAll("<nav class=\"pagination\" aria-label=\"Changelog pages\">") catch
+        writer.writeAll("</div><nav class=\"pagination\" aria-label=\"Changelog pages\">") catch
             return context.empty(.internal_server_error);
         if (changelog_page > 1) writer.print(
             "<a class=\"button button-quiet\" href=\"/changelog?page={d}\">← Newer</a>",
@@ -949,7 +949,7 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
     writer.writeAll("</p><span>Published by ") catch return context.empty(.internal_server_error);
     highlight.escapeHtml(&writer, entry.author_name) catch
         return context.empty(.internal_server_error);
-    writer.writeAll("</span></header><div class=\"card markdown\">") catch
+    writer.writeAll("</span></header><div class=\"list-scroll\"><div class=\"card markdown\">") catch
         return context.empty(.internal_server_error);
     markdown.render(&writer, entry.body_markdown) catch
         return context.empty(.internal_server_error);
@@ -962,7 +962,7 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
         writer.writeAll("</div></section>") catch
             return context.empty(.internal_server_error);
     }
-    writer.writeAll("</article>") catch return context.empty(.internal_server_error);
+    writer.writeAll("</div></article>") catch return context.empty(.internal_server_error);
     page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
@@ -1113,15 +1113,17 @@ fn renderGroupedIssues(
             try writer.writeAll("<div class=\"group-controls\">");
             try writer.writeAll("<button type=\"button\" class=\"button button-quiet\" data-groups=\"expand\">Expand all</button>");
             try writer.writeAll("<button type=\"button\" class=\"button button-quiet\" data-groups=\"collapse\">Collapse all</button>");
-            try writer.writeAll("</div>");
+            try writer.writeAll("</div><div class=\"list-scroll\">");
         }
         rendered += 1;
         try renderStatusGroup(writer, status, result, query);
     }
     if (rendered == 0) {
-        try writer.writeAll("<div class=\"empty-card\"><h3>No feedback yet.</h3>");
+        try writer.writeAll("<div class=\"list-scroll\"><div class=\"empty-card\"><h3>No feedback yet.</h3>");
         try writer.writeAll("<p>Sign in with Discord to file the first item.</p>");
-        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">New feedback</a></div>");
+        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">New feedback</a></div></div>");
+    } else {
+        try writer.writeAll("</div>");
     }
     try writer.writeAll("</div>");
 }
@@ -1173,12 +1175,12 @@ fn writeIssuesHref(
 
 fn renderIssueCards(writer: *std.Io.Writer, items: []const models.IssueSummary, total: i64) !void {
     if (items.len == 0) {
-        try writer.writeAll("<div class=\"empty-card\"><h3>No feedback yet.</h3>");
+        try writer.writeAll("<div class=\"list-scroll\"><div class=\"empty-card\"><h3>No feedback yet.</h3>");
         try writer.writeAll("<p>Sign in with Discord to file the first item.</p>");
-        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">New feedback</a></div>");
+        try writer.writeAll("<a class=\"text-link\" href=\"/issues/new\">New feedback</a></div></div>");
         return;
     }
-    try writer.print("<div class=\"issue-list\" data-total=\"{d}\">", .{total});
+    try writer.print("<div class=\"list-scroll issue-list\" data-total=\"{d}\">", .{total});
     for (items) |issue| try renderIssueCard(writer, issue);
     try writer.writeAll("</div>");
 }
@@ -1383,7 +1385,7 @@ fn renderIssueForm(
 ) !void {
     try writer.writeAll("<section class=\"form-page\"><div>");
     try writer.writeAll("<h1>New feedback</h1><p>Give enough context for someone else to understand and, for bugs, reproduce it.</p></div>");
-    try writer.writeAll("<form class=\"stacked-form\" method=\"post\" action=\"/issues\">");
+    try writer.writeAll("<form class=\"stacked-form list-scroll\" method=\"post\" action=\"/issues\">");
     try writer.writeAll(csrf_input);
     if (error_message) |message| {
         try writer.writeAll("<p class=\"form-error\" role=\"alert\">");
@@ -1556,7 +1558,7 @@ fn renderRoadmapColumn(
 ) !void {
     try writer.writeAll("<div class=\"roadmap-column\"><header><h2>");
     try writer.writeAll(title);
-    try writer.print("</h2><span>{d}</span></header>", .{result.total});
+    try writer.print("</h2><span>{d}</span></header><div class=\"list-scroll\">", .{result.total});
     if (result.items.len == 0) {
         try writer.writeAll("<p class=\"roadmap-empty\">Nothing here yet.</p>");
     } else {
@@ -1577,6 +1579,7 @@ fn renderRoadmapColumn(
             try writer.print(" · {d} votes</span></a>", .{issue.vote_count});
         }
     }
+    try writer.writeAll("</div>");
     if (page_number > 1 or result.total > domain.list_page_size) {
         try writer.writeAll("<nav class=\"pagination\" aria-label=\"");
         try writer.writeAll(title);

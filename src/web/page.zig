@@ -219,7 +219,7 @@ pub fn errorPage(
         .tagline = settings.tagline,
         .logo_url = null,
     }, title, .none, null, scheme);
-    try writer.writeAll("<section class=\"empty-card error-page\"><p class=\"kicker\">");
+    try writer.writeAll("<section class=\"empty-card error-page list-scroll\"><p class=\"kicker\">");
     try highlight.escapeHtml(writer, status);
     try writer.writeAll("</p><h1>");
     try highlight.escapeHtml(writer, title);
@@ -276,7 +276,7 @@ pub fn issueEditForm(
     error_message: ?[]const u8,
 ) std.Io.Writer.Error!void {
     try writer.writeAll("<section class=\"form-page\"><div><h1>Edit feedback</h1><p>Changes are recorded in the issue activity history.</p></div>");
-    try writer.writeAll("<form class=\"stacked-form\" method=\"post\" action=\"");
+    try writer.writeAll("<form class=\"stacked-form list-scroll\" method=\"post\" action=\"");
     try highlight.escapeHtml(writer, action);
     try writer.writeAll("\">");
     try writer.writeAll(csrf_input);

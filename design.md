@@ -19,16 +19,17 @@ modern-minimal
 ## Theme
 
 Studied DNA from https://pika-os.com, dark surfaces from
-https://builder.pika-os.com. Warm paper yellows in light, charcoal paper in
-dark, amber accent. Primary CTA is ink fill with amber text in light, amber
-fill with dark text in dark (builder sidebar chip).
+https://builder.pika-os.com. Warm paper yellows in light. Dark paper is
+chroma-0 charcoal (`#161616` / `#1f1f1f`), not hue-96 brown. Amber (hue 96)
+is accent and CTA only. Primary CTA is ink fill with amber text in light,
+amber fill with dark text in dark (builder sidebar chip).
 
-- `--color-paper`   light-dark(oklch(97.5% 0.015 96), oklch(17% 0.012 96))
-- `--color-paper-2` light-dark(oklch(95.5% 0.018 96), oklch(21% 0.014 96))
-- `--color-paper-3` light-dark(oklch(93% 0.022 96), oklch(25% 0.016 96))
-- `--color-ink`     light-dark(oklch(26% 0.012 96), oklch(91% 0.012 96))
-- `--color-ink-2`   light-dark(oklch(32% 0.012 96), oklch(78% 0.016 96))
-- `--color-rule`    light-dark(oklch(82% 0.014 96), oklch(27% 0.014 96))
+- `--color-paper`   light-dark(oklch(97.5% 0.015 96), oklch(20% 0 0))
+- `--color-paper-2` light-dark(oklch(95.5% 0.018 96), oklch(24% 0 0))
+- `--color-paper-3` light-dark(oklch(93% 0.022 96), oklch(30% 0 0))
+- `--color-ink`     light-dark(oklch(26% 0.012 96), oklch(91% 0 0))
+- `--color-ink-2`   light-dark(oklch(32% 0.012 96), oklch(78% 0 0))
+- `--color-rule`    light-dark(oklch(82% 0.014 96), oklch(34% 0 0))
 - `--color-accent`  light-dark(oklch(90.2% 0.173 96.7), oklch(88% 0.17 96))
 - `--color-focus`   light-dark(oklch(72% 0.16 96.7), oklch(88% 0.17 96))
 - `--color-primary-fill` / `--color-primary-text` for CTA (do not invert `--color-ink`)
@@ -84,7 +85,8 @@ tokens (`var(--space-md)`), never raw values.
   CTA text).
 - Color scheme follows `prefers-color-scheme` unless the visitor pins Light or
   Dark via the header control (`poof_theme` cookie, `data-theme` on `<html>`).
-  Same hue 96 in both modes. Dark paper is warm, not black.
+  Light paper stays hue 96. Dark paper is chroma 0 charcoal, matching
+  builder. Hue 96 is accent/CTA only in dark.
 - Ubuntu Sans + JetBrains Mono.
 - Compact CTA voice (radius-sm, ink primary with accent text, bordered secondary).
 - Stacked section heads. No hanging left-margin labels.

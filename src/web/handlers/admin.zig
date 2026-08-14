@@ -176,7 +176,7 @@ pub fn dashboard(
         return context.empty(.internal_server_error);
     writer.writeAll("<h1>Triage</h1><p>Status, priority, boards, projects, branding, and release notes for this company.</p></div>") catch
         return context.empty(.internal_server_error);
-    writer.print("<div class=\"admin-stat\"><strong>{d}</strong><span>feedback items</span></div></header>", .{issues.total}) catch
+    writer.print("<div class=\"admin-stat\"><strong>{d}</strong><span>feedback items</span></div></header><div class=\"list-scroll\">", .{issues.total}) catch
         return context.empty(.internal_server_error);
     renderBranding(&writer, branding, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
@@ -194,6 +194,7 @@ pub fn dashboard(
         token.hiddenInput(),
     ) catch
         return context.empty(.internal_server_error);
+    writer.writeAll("</div></section>") catch return context.empty(.internal_server_error);
     page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &token);
@@ -676,10 +677,10 @@ fn renderIssues(
             try highlight.escapeHtml(writer, project.name);
             try writer.writeAll("</option>");
         }
-        try writer.print("</select></label><label class=\"check\"><input type=\"checkbox\" name=\"pinned\" value=\"true\"{s}> Pin</label>", .{
+        try writer.print("</select></label><label class=\"check\">Pin<input type=\"checkbox\" name=\"pinned\" value=\"true\"{s}></label>", .{
             if (issue.pinned) " checked" else "",
         });
-        try writer.print("<label class=\"check\"><input type=\"checkbox\" name=\"locked\" value=\"true\"{s}> Lock</label>", .{
+        try writer.print("<label class=\"check\">Lock<input type=\"checkbox\" name=\"locked\" value=\"true\"{s}></label>", .{
             if (issue.locked) " checked" else "",
         });
         try writer.writeAll("<label>Duplicate of<input type=\"number\" name=\"duplicate_of_id\" min=\"1\" value=\"");
@@ -921,7 +922,7 @@ fn renderChangelogEditForm(
     csrf_input: []const u8,
 ) !void {
     try writer.writeAll("<section class=\"form-page\"><div><h1>Edit release notes</h1><p>Save the draft here, then publish from the admin dashboard.</p></div>");
-    try writer.print("<form class=\"stacked-form\" method=\"post\" action=\"/admin/changelog/{d}/content\">", .{entry.id});
+    try writer.print("<form class=\"stacked-form list-scroll\" method=\"post\" action=\"/admin/changelog/{d}/content\">", .{entry.id});
     try writer.writeAll(csrf_input);
     try writer.writeAll("<div class=\"form-row\"><label>Title<input name=\"title\" required maxlength=\"160\" value=\"");
     try highlight.escapeHtml(writer, entry.title);

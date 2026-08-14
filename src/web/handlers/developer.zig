@@ -156,7 +156,7 @@ fn render(
         return context.empty(.internal_server_error);
     writer.writeAll("<section class=\"developer-page\"><header>") catch
         return context.empty(.internal_server_error);
-    writer.writeAll("<h1>MCP tokens</h1><p>Scoped, expiring bearer tokens for the remote Poof MCP server.</p></header>") catch
+    writer.writeAll("<h1>MCP tokens</h1><p>Scoped, expiring bearer tokens for the remote Poof MCP server.</p></header><div class=\"list-scroll\">") catch
         return context.empty(.internal_server_error);
     if (plaintext) |token| renderNewToken(&writer, settings.public_url, token) catch
         return context.empty(.internal_server_error);
@@ -170,6 +170,7 @@ fn render(
     renderAuditEvents(&writer, events) catch return context.empty(.internal_server_error);
     renderSetup(&writer, settings.public_url) catch
         return context.empty(.internal_server_error);
+    writer.writeAll("</div></section>") catch return context.empty(.internal_server_error);
     page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &csrf_token);

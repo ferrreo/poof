@@ -8,21 +8,21 @@
 
 :root {
   color-scheme: light dark;
-  --color-paper: light-dark(oklch(97.5% 0.015 96), oklch(17% 0.012 96));
-  --color-paper-2: light-dark(oklch(95.5% 0.018 96), oklch(21% 0.014 96));
-  --color-paper-3: light-dark(oklch(93% 0.022 96), oklch(25% 0.016 96));
-  --color-rule: light-dark(oklch(82% 0.014 96), oklch(27% 0.014 96));
-  --color-rule-2: light-dark(oklch(68% 0.016 96), oklch(38% 0.018 96));
-  --color-muted: light-dark(oklch(52% 0.014 96), oklch(68% 0.014 96));
-  --color-neutral: light-dark(oklch(38% 0.013 96), oklch(54% 0.012 96));
-  --color-ink-2: light-dark(oklch(32% 0.012 96), oklch(78% 0.016 96));
-  --color-ink: light-dark(oklch(26% 0.012 96), oklch(91% 0.012 96));
+  --color-paper: light-dark(oklch(97.5% 0.015 96), oklch(20% 0 0));
+  --color-paper-2: light-dark(oklch(95.5% 0.018 96), oklch(24% 0 0));
+  --color-paper-3: light-dark(oklch(93% 0.022 96), oklch(30% 0 0));
+  --color-rule: light-dark(oklch(82% 0.014 96), oklch(34% 0 0));
+  --color-rule-2: light-dark(oklch(68% 0.016 96), oklch(45% 0 0));
+  --color-muted: light-dark(oklch(52% 0.014 96), oklch(69% 0 0));
+  --color-neutral: light-dark(oklch(38% 0.013 96), oklch(54% 0 0));
+  --color-ink-2: light-dark(oklch(32% 0.012 96), oklch(78% 0 0));
+  --color-ink: light-dark(oklch(26% 0.012 96), oklch(91% 0 0));
   --color-accent: light-dark(oklch(90.2% 0.173 96.7), oklch(88% 0.17 96));
   --color-accent-ink: light-dark(oklch(42% 0.12 96), oklch(86% 0.11 96));
   --color-focus: light-dark(oklch(72% 0.16 96.7), oklch(88% 0.17 96));
-  --color-code-paper: light-dark(oklch(22% 0.012 96), oklch(12% 0.012 96));
-  --color-code-ink: oklch(94% 0.02 96);
-  --color-edge: light-dark(oklch(26% 0.012 96), oklch(38% 0.018 96));
+  --color-code-paper: light-dark(oklch(22% 0.012 96), oklch(12% 0 0));
+  --color-code-ink: oklch(94% 0 0);
+  --color-edge: light-dark(oklch(26% 0.012 96), oklch(38% 0 0));
   --color-primary-fill: light-dark(oklch(26% 0.012 96), oklch(88% 0.17 96));
   --color-primary-text: light-dark(oklch(90.2% 0.173 96.7), oklch(24% 0.045 96));
   --color-primary-fill-hover: light-dark(oklch(32% 0.012 96), oklch(82% 0.155 96));
@@ -88,6 +88,7 @@
   --z-tooltip: 600;
 
   --control-height: 2.625rem;
+  --scrollbar-size: 0.5rem;
 
   font-family: var(--font-body);
   font-synthesis: none;
@@ -97,11 +98,6 @@
 *::before,
 *::after {
   box-sizing: border-box;
-}
-
-html,
-body {
-  overflow-x: clip;
 }
 
 html[data-theme="light"] {
@@ -114,16 +110,54 @@ html[data-theme="dark"] {
 
 html {
   min-width: 320px;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--color-paper);
   color: var(--color-ink);
 }
 
 body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
   margin: 0;
+  overflow: hidden;
   color: var(--color-ink);
   background: var(--color-paper);
   font-size: var(--text-base);
   line-height: var(--lh-normal);
+}
+
+body > .site-header,
+body > footer {
+  flex: none;
+}
+
+body > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+main > .hero,
+main > .page-heading {
+  flex: none;
+}
+
+main > .feedback-shell,
+main > .roadmap-grid,
+main > .changelog-list,
+main > .changelog-detail,
+main > .issue-detail,
+main > .admin-shell,
+main > .developer-page,
+main > .profile-page,
+main > .form-page,
+main > .empty-card {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 a {
@@ -335,6 +369,7 @@ nav a.active {
 /* ── Hero & page shells ──────────────────────────────────────────────── */
 
 .hero {
+  flex: none;
   width: var(--page);
   margin: 0 auto;
   padding: var(--space-xl) 0 var(--space-lg);
@@ -383,9 +418,23 @@ main > .empty-card {
   margin-left: auto;
 }
 
+.feedback-shell,
+.changelog-list,
+.changelog-detail,
+.issue-detail,
+.admin-shell,
+.developer-page,
+.profile-page,
+.form-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .feedback-shell {
-  margin-bottom: var(--space-3xl);
+  margin-bottom: 0;
   padding-top: var(--space-sm);
+  padding-bottom: var(--space-md);
   border-top: var(--rule-card) solid var(--color-rule);
 }
 
@@ -395,7 +444,46 @@ main > .empty-card {
   align-items: end;
   justify-content: space-between;
   gap: var(--space-md);
+  flex: none;
   padding: var(--space-lg) 0 var(--space-md);
+}
+
+.list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-rule-2) var(--color-paper-2);
+  scrollbar-gutter: stable;
+}
+
+.list-scroll::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.list-scroll::-webkit-scrollbar-track {
+  background: var(--color-paper-2);
+  border-radius: var(--radius-sm);
+}
+
+.list-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-rule-2);
+  border: 2px solid var(--color-paper-2);
+  border-radius: var(--radius-sm);
+}
+
+.list-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+.feedback-shell > .pagination,
+.changelog-list > .pagination,
+.profile-page > .pagination,
+.roadmap-column > .pagination {
+  flex: none;
 }
 
 /* ── Forms & inputs ──────────────────────────────────────────────────── */
@@ -538,13 +626,18 @@ select {
 }
 
 .status-groups {
-  display: grid;
-  gap: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--space-md);
+  overflow: hidden;
 }
 
 .group-controls {
   display: flex;
   flex-wrap: wrap;
+  flex: none;
   gap: var(--space-xs);
 }
 
@@ -767,7 +860,7 @@ select {
 /* ── Page headings ───────────────────────────────────────────────────── */
 
 .page-heading {
-  padding: var(--space-2xl) 0 var(--space-lg);
+  padding: var(--space-xl) 0 var(--space-md);
 }
 
 .page-heading h1,
@@ -801,15 +894,20 @@ select {
 
 .roadmap-grid {
   width: var(--page);
-  margin: 0 auto var(--space-3xl);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr);
   gap: 0;
-  align-items: start;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .roadmap-column {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0 var(--space-lg) 0 0;
   border-right: var(--rule-card) solid var(--color-rule);
 }
@@ -826,6 +924,7 @@ select {
 
 .roadmap-column > header {
   display: flex;
+  flex: none;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-sm);
@@ -877,10 +976,11 @@ select {
 /* ── Issue detail ──────────────────────────────────────────────────────── */
 
 .issue-detail {
-  padding: var(--space-2xl) 0 var(--space-3xl);
+  padding: var(--space-xl) 0 var(--space-md);
 }
 
 .issue-detail-header {
+  flex: none;
   padding-bottom: var(--space-lg);
   border-bottom: var(--rule-card) solid var(--color-rule);
 }
@@ -1012,8 +1112,9 @@ select {
 /* ── Changelog ───────────────────────────────────────────────────────── */
 
 .changelog-list {
-  display: grid;
-  margin-bottom: var(--space-3xl);
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
 }
 
 .changelog-card {
@@ -1047,11 +1148,13 @@ select {
 }
 
 .changelog-detail {
-  padding-top: var(--space-2xl);
-  margin-bottom: var(--space-3xl);
+  padding-top: var(--space-xl);
+  padding-bottom: var(--space-md);
+  margin-bottom: 0;
 }
 
 .changelog-detail > header {
+  flex: none;
   margin-bottom: var(--space-xl);
   padding-bottom: var(--space-lg);
   border-bottom: var(--rule-heavy) solid var(--color-edge);
@@ -1078,11 +1181,12 @@ select {
 /* ── Admin shell ───────────────────────────────────────────────────────── */
 
 .admin-shell {
-  padding: var(--space-2xl) 0 var(--space-3xl);
+  padding: var(--space-xl) 0 var(--space-md);
 }
 
 .admin-heading {
   display: flex;
+  flex: none;
   align-items: end;
   justify-content: space-between;
   gap: var(--space-lg);
@@ -1187,14 +1291,12 @@ select {
 
 .admin-issue .check {
   align-self: end;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-2xs);
+  display: grid;
+  grid-template-rows: auto var(--control-height);
+  gap: var(--space-3xs);
   margin: 0;
-  text-transform: none;
-  letter-spacing: 0;
-  white-space: nowrap;
+  justify-items: start;
+  align-items: center;
 }
 
 .admin-row-actions {
@@ -1281,11 +1383,13 @@ select {
 .developer-page,
 .profile-page,
 .form-page {
-  padding: var(--space-2xl) 0 var(--space-3xl);
+  padding: var(--space-xl) 0 var(--space-md);
 }
 
 .profile-page > header,
-.developer-page > header {
+.developer-page > header,
+.form-page > div:first-child {
+  flex: none;
   margin-bottom: var(--space-xl);
 }
 
@@ -1719,7 +1823,7 @@ footer {
   view-transition-name: site-footer;
   width: var(--page);
   margin: 0 auto;
-  padding: var(--space-lg) 0 var(--space-2xl);
+  padding: var(--space-sm) 0 var(--space-md);
   border-top: var(--rule-heavy) solid var(--color-edge);
   color: var(--color-muted);
   font-size: var(--text-xs);
@@ -1808,12 +1912,43 @@ footer a {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .roadmap-grid {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-rule-2) var(--color-paper-2);
+    align-items: start;
+  }
+
   .roadmap-column,
   .roadmap-column:nth-child(2),
   .roadmap-column:last-child {
     padding: 0 0 var(--space-xl);
     border-right: 0;
     border-bottom: var(--rule-card) solid var(--color-rule);
+    overflow: visible;
+    min-height: auto;
+  }
+
+  .roadmap-column > .list-scroll {
+    overflow: visible;
+    flex: none;
+    min-height: auto;
+    scrollbar-gutter: auto;
+  }
+
+  .roadmap-grid::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+  }
+
+  .roadmap-grid::-webkit-scrollbar-track {
+    background: var(--color-paper-2);
+  }
+
+  .roadmap-grid::-webkit-scrollbar-thumb {
+    background: var(--color-rule-2);
+    border: 2px solid var(--color-paper-2);
+    border-radius: var(--radius-sm);
   }
 
   .issue-actions {
