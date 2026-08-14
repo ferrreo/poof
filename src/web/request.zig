@@ -7,13 +7,18 @@ const store = @import("../store.zig");
 pub const Workspace = struct {
     data_allocator: std.heap.FixedBufferAllocator,
     output: []u8,
+    io: std.Io,
+    started: std.Io.Timestamp,
 
     pub fn init(context: *app_state.Context) error{WorkspaceUnavailable}!Workspace {
+        const io = context.state.io orelse return error.WorkspaceUnavailable;
         const buffer = context.response_body orelse return error.WorkspaceUnavailable;
         const data_bytes = @min(buffer.len / 3, 128 * 1024);
         return .{
             .data_allocator = std.heap.FixedBufferAllocator.init(buffer[0..data_bytes]),
             .output = buffer[data_bytes..],
+            .io = io,
+            .started = std.Io.Clock.awake.now(io),
         };
     }
 
@@ -27,6 +32,13 @@ pub const Workspace = struct {
 
     pub fn rendered(self: *Workspace, output_writer: *const std.Io.Writer) []const u8 {
         return self.output[0..output_writer.end];
+    }
+
+    pub fn elapsedNs(self: *const Workspace) u64 {
+        const now = std.Io.Clock.awake.now(self.io);
+        const ns = self.started.durationTo(now).toNanoseconds();
+        if (ns <= 0) return 0;
+        return @intCast(ns);
     }
 };
 

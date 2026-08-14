@@ -163,7 +163,7 @@ pub fn dashboard(
         token.hiddenInput(),
     ) catch
         return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &token);
     return response;
@@ -246,7 +246,7 @@ pub fn editIssuePage(context: *app_state.Context) app_state.Context.ResponseType
         return context.empty(.internal_server_error);
     tryRenderIssueContentForm(&writer, issue, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &token);
     return response;
@@ -438,7 +438,7 @@ pub fn editChangelogPage(context: *app_state.Context) app_state.Context.Response
         return context.empty(.internal_server_error);
     renderChangelogEditForm(&writer, entry, linked, token.hiddenInput()) catch
         return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &token);
     return response;

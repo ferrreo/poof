@@ -1507,6 +1507,11 @@ footer {
   margin: 0 0 var(--space-sm);
 }
 
+.render-time {
+  margin: 0 0 var(--space-sm);
+  font-variant-numeric: tabular-nums;
+}
+
 footer a {
   color: var(--color-ink);
   text-underline-offset: 0.2em;

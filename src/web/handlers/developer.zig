@@ -170,7 +170,7 @@ fn render(
     renderAuditEvents(&writer, events) catch return context.empty(.internal_server_error);
     renderSetup(&writer, settings.public_url) catch
         return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &csrf_token);
     response.setHeaderStatic("cache-control", "no-store") catch {};

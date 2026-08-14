@@ -153,7 +153,7 @@ fn renderIssueList(
     renderPager(&writer, query, result.total) catch
         return context.empty(.internal_server_error);
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
@@ -286,7 +286,7 @@ pub fn detail(
     }
     writer.writeAll("</aside></div></article>") catch
         return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     if (csrf_token) |*token| csrf.attach(&response, token);
     return response;
@@ -529,7 +529,7 @@ pub fn me(context: *app_state.Context) app_state.Context.ResponseType {
         writer.writeAll("</div>") catch return context.empty(.internal_server_error);
     }
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(.ok, workspace.rendered(&writer));
     csrf.attach(&response, &csrf_token);
     return response;
@@ -584,7 +584,7 @@ pub fn roadmap(context: *app_state.Context) app_state.Context.ResponseType {
     renderRoadmapColumn(&writer, "Recently completed", completed) catch
         return context.empty(.internal_server_error);
     writer.writeAll("</section>") catch return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
@@ -642,7 +642,7 @@ pub fn changelog(
         ) catch return context.empty(.internal_server_error);
         writer.writeAll("</nav></section>") catch return context.empty(.internal_server_error);
     }
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
@@ -703,7 +703,7 @@ pub fn changelogDetail(context: *app_state.Context) app_state.Context.ResponseTy
             return context.empty(.internal_server_error);
     }
     writer.writeAll("</article>") catch return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, &workspace) catch return context.empty(.internal_server_error);
     return context.htmlBorrowed(.ok, workspace.rendered(&writer));
 }
 
@@ -1095,7 +1095,7 @@ fn issueFormResponse(
         return context.empty(.internal_server_error);
     renderIssueForm(&writer, boards, csrf_token.hiddenInput(), values, error_message) catch
         return context.empty(.internal_server_error);
-    page.end(&writer) catch return context.empty(.internal_server_error);
+    page.end(&writer, workspace) catch return context.empty(.internal_server_error);
     var response = context.htmlBorrowed(status, workspace.rendered(&writer));
     csrf.attach(&response, &csrf_token);
     return response;
