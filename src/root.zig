@@ -66,6 +66,7 @@ fn readiness(state: *State) *const ploof.Lifecycle.Readiness {
 
 const BrowserRoutes = ploof.group("", .{csrf_module.policy}, .{
     ploof.get("/", public_handlers.home),
+    ploof.get("/favicon.ico", public_handlers.favicon),
     ploof.get(
         "/issues",
         public_handlers.ListDefinition.handle(public_handlers.list),

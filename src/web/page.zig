@@ -40,7 +40,15 @@ pub fn begin(
     try highlight.escapeHtml(writer, title);
     try writer.writeAll(" — ");
     try highlight.escapeHtml(writer, branding.company_name);
-    try writer.writeAll("</title></head><body>");
+    try writer.writeAll("</title>");
+    if (branding.logo_url) |logo| {
+        try writer.writeAll("<link rel=\"icon\" href=\"");
+        try escapeAttribute(writer, logo);
+        try writer.writeAll("\"><link rel=\"apple-touch-icon\" href=\"");
+        try escapeAttribute(writer, logo);
+        try writer.writeAll("\">");
+    }
+    try writer.writeAll("</head><body>");
     try writer.writeAll("<header class=\"site-header\">");
     try writer.writeAll("<a class=\"brand\" href=\"/\">");
     if (branding.logo_url) |logo| {
@@ -117,6 +125,17 @@ pub fn kindBadge(
     try writer.print(
         "<span class=\"kind kind-{s}\">{s}</span>",
         .{ @tagName(kind), kind.label() },
+    );
+}
+
+pub fn priorityBadge(
+    writer: *std.Io.Writer,
+    priority: domain.Priority,
+) std.Io.Writer.Error!void {
+    if (priority == .none) return;
+    try writer.print(
+        "<span class=\"priority priority-{s}\">{s}</span>",
+        .{ @tagName(priority), priority.label() },
     );
 }
 

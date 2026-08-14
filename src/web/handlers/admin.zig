@@ -518,7 +518,9 @@ fn renderIssues(
         try writer.writeAll(csrf_input);
         try writer.writeAll("<div class=\"admin-issue-title\"><strong>");
         try highlight.escapeHtml(writer, issue.title);
-        try writer.print("</strong><span>#{d} · {d} votes</span></div>", .{ issue.id, issue.vote_count });
+        try writer.print("</strong><span>#{d} · {d} votes</span>", .{ issue.id, issue.vote_count });
+        try page.priorityBadge(writer, issue.priority);
+        try writer.writeAll("</div>");
         try writer.writeAll("<label>Status<select name=\"status\">");
         inline for (std.meta.tags(domain.IssueStatus)) |status| {
             try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
@@ -532,7 +534,7 @@ fn renderIssues(
             try writer.print("<option value=\"{s}\"{s}>{s}</option>", .{
                 @tagName(priority),
                 if (issue.priority == priority) " selected" else "",
-                @tagName(priority),
+                priority.label(),
             });
         }
         try writer.writeAll("</select></label><label>Board<select name=\"board_id\">");

@@ -85,6 +85,15 @@ pub fn home(context: *app_state.Context) app_state.Context.ResponseType {
     return renderIssueList(context, .{}, true);
 }
 
+pub fn favicon(context: *app_state.Context) app_state.Context.ResponseType {
+    const settings = app_state.config(context) orelse return context.empty(.not_found);
+    const database = app_state.database(context) orelse return context.empty(.not_found);
+    var workspace = request.Workspace.init(context) catch return context.empty(.not_found);
+    const branding = page.resolveBranding(workspace.allocator(), database, settings);
+    const logo = branding.logo_url orelse return context.empty(.not_found);
+    return request.redirect(context, .temporary_redirect, logo);
+}
+
 pub fn list(
     context: *app_state.Context,
     input: ListDefinition.InputType,
@@ -225,6 +234,7 @@ pub fn detail(
         return context.empty(.internal_server_error);
     page.statusBadge(&writer, issue.status) catch return context.empty(.internal_server_error);
     page.kindBadge(&writer, issue.kind) catch return context.empty(.internal_server_error);
+    page.priorityBadge(&writer, issue.priority) catch return context.empty(.internal_server_error);
     writer.print(
         "<span>{d} votes</span><span>{d} comments</span><span>by ",
         .{ issue.vote_count, issue.comment_count },
@@ -829,6 +839,7 @@ fn renderIssueCard(writer: *std.Io.Writer, issue: models.IssueSummary) !void {
     try writer.writeAll("</strong><span>votes</span></div><div class=\"issue-card-body\"><div class=\"issue-card-meta\">");
     try page.statusBadge(writer, issue.status);
     try page.kindBadge(writer, issue.kind);
+    try page.priorityBadge(writer, issue.priority);
     try writer.writeAll("</div><h3><a href=\"");
     try writer.writeAll(url);
     try writer.writeAll("\">");
@@ -1119,6 +1130,8 @@ fn renderRoadmapColumn(
             try writer.writeAll("\"><strong>");
             try highlight.escapeHtml(writer, issue.title);
             try writer.writeAll("</strong><span>");
+            try page.priorityBadge(writer, issue.priority);
+            if (issue.priority != .none) try writer.writeAll(" ");
             try highlight.escapeHtml(writer, issue.board_name);
             try writer.print(" · {d} votes</span></a>", .{issue.vote_count});
         }

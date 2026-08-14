@@ -59,6 +59,16 @@ pub const Priority = enum {
     medium,
     high,
     urgent,
+
+    pub fn label(self: Priority) []const u8 {
+        return switch (self) {
+            .none => "None",
+            .low => "Low",
+            .medium => "Medium",
+            .high => "High",
+            .urgent => "Urgent",
+        };
+    }
 };
 
 pub const Scope = enum(u6) {
@@ -257,6 +267,7 @@ test "roadmap statuses are explicit" {
     try std.testing.expect(IssueStatus.completed.appearsOnRoadmap());
     try std.testing.expect(!IssueStatus.pending.appearsOnRoadmap());
     try std.testing.expect(!IssueStatus.closed.appearsOnRoadmap());
+    try std.testing.expectEqualStrings("Urgent", Priority.urgent.label());
 }
 
 test "admin scopes cannot be granted to a member" {

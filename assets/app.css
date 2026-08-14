@@ -587,6 +587,44 @@ select {
   color: var(--color-accent-ink);
 }
 
+.priority {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0 var(--space-2xs);
+  border: var(--rule-card) solid var(--color-rule-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.priority-low {
+  color: var(--color-muted);
+}
+
+.priority-medium {
+  color: var(--color-ink);
+}
+
+.priority-high {
+  border-color: var(--color-accent-ink);
+  color: var(--color-accent-ink);
+}
+
+.priority-urgent {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.roadmap-card .priority {
+  margin-right: 0.35em;
+  vertical-align: middle;
+}
+
 .issue-card h3 {
   margin: var(--space-2xs) 0;
 }
