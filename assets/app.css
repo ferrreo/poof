@@ -136,28 +136,32 @@ body > footer {
 body > main {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-rule-2) var(--color-paper-2);
+  scrollbar-gutter: stable;
 }
 
-main > .hero,
-main > .page-heading {
-  flex: none;
+body > main::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 
-main > .feedback-shell,
-main > .roadmap-grid,
-main > .changelog-list,
-main > .changelog-detail,
-main > .issue-detail,
-main > .admin-shell,
-main > .developer-page,
-main > .profile-page,
-main > .form-page,
-main > .empty-card {
-  flex: 1 1 auto;
-  min-height: 0;
+body > main::-webkit-scrollbar-track {
+  background: var(--color-paper-2);
+  border-radius: var(--radius-sm);
+}
+
+body > main::-webkit-scrollbar-thumb {
+  background: var(--color-rule-2);
+  border: 2px solid var(--color-paper-2);
+  border-radius: var(--radius-sm);
+}
+
+body > main::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
 }
 
 a {
@@ -418,19 +422,6 @@ main > .empty-card {
   margin-left: auto;
 }
 
-.feedback-shell,
-.changelog-list,
-.changelog-detail,
-.issue-detail,
-.admin-shell,
-.developer-page,
-.profile-page,
-.form-page {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .feedback-shell {
   margin-bottom: 0;
   padding-top: var(--space-sm);
@@ -444,46 +435,7 @@ main > .empty-card {
   align-items: end;
   justify-content: space-between;
   gap: var(--space-md);
-  flex: none;
   padding: var(--space-lg) 0 var(--space-md);
-}
-
-.list-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: clip;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-rule-2) var(--color-paper-2);
-  scrollbar-gutter: stable;
-}
-
-.list-scroll::-webkit-scrollbar {
-  width: var(--scrollbar-size);
-  height: var(--scrollbar-size);
-}
-
-.list-scroll::-webkit-scrollbar-track {
-  background: var(--color-paper-2);
-  border-radius: var(--radius-sm);
-}
-
-.list-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-rule-2);
-  border: 2px solid var(--color-paper-2);
-  border-radius: var(--radius-sm);
-}
-
-.list-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted);
-}
-
-.feedback-shell > .pagination,
-.changelog-list > .pagination,
-.profile-page > .pagination,
-.roadmap-column > .pagination {
-  flex: none;
 }
 
 /* ── Forms & inputs ──────────────────────────────────────────────────── */
@@ -629,18 +581,13 @@ select {
 }
 
 .status-groups {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
+  display: grid;
   gap: var(--space-md);
-  overflow: hidden;
 }
 
 .group-controls {
   display: flex;
   flex-wrap: wrap;
-  flex: none;
   gap: var(--space-xs);
 }
 
@@ -897,20 +844,15 @@ select {
 
 .roadmap-grid {
   width: var(--page);
-  margin: 0 auto;
+  margin: 0 auto var(--space-xl);
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr);
   gap: 0;
-  align-items: stretch;
-  overflow: hidden;
+  align-items: start;
 }
 
 .roadmap-column {
   min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
   padding: 0 var(--space-lg) 0 0;
   border-right: var(--rule-card) solid var(--color-rule);
 }
@@ -927,7 +869,6 @@ select {
 
 .roadmap-column > header {
   display: flex;
-  flex: none;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-sm);
@@ -983,7 +924,6 @@ select {
 }
 
 .issue-detail-header {
-  flex: none;
   padding-bottom: var(--space-lg);
   border-bottom: var(--rule-card) solid var(--color-rule);
 }
@@ -1115,9 +1055,8 @@ select {
 /* ── Changelog ───────────────────────────────────────────────────────── */
 
 .changelog-list {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0;
+  display: grid;
+  margin-bottom: var(--space-xl);
 }
 
 .changelog-card {
@@ -1157,7 +1096,6 @@ select {
 }
 
 .changelog-detail > header {
-  flex: none;
   margin-bottom: var(--space-xl);
   padding-bottom: var(--space-lg);
   border-bottom: var(--rule-heavy) solid var(--color-edge);
@@ -1189,7 +1127,6 @@ select {
 
 .admin-heading {
   display: flex;
-  flex: none;
   align-items: end;
   justify-content: space-between;
   gap: var(--space-lg);
@@ -1392,7 +1329,6 @@ select {
 .profile-page > header,
 .developer-page > header,
 .form-page > div:first-child {
-  flex: none;
   margin-bottom: var(--space-xl);
 }
 
@@ -1915,43 +1851,12 @@ footer a {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .roadmap-grid {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-rule-2) var(--color-paper-2);
-    align-items: start;
-  }
-
   .roadmap-column,
   .roadmap-column:nth-child(2),
   .roadmap-column:last-child {
     padding: 0 0 var(--space-xl);
     border-right: 0;
     border-bottom: var(--rule-card) solid var(--color-rule);
-    overflow: visible;
-    min-height: auto;
-  }
-
-  .roadmap-column > .list-scroll {
-    overflow: visible;
-    flex: none;
-    min-height: auto;
-    scrollbar-gutter: auto;
-  }
-
-  .roadmap-grid::-webkit-scrollbar {
-    width: var(--scrollbar-size);
-  }
-
-  .roadmap-grid::-webkit-scrollbar-track {
-    background: var(--color-paper-2);
-  }
-
-  .roadmap-grid::-webkit-scrollbar-thumb {
-    background: var(--color-rule-2);
-    border: 2px solid var(--color-paper-2);
-    border-radius: var(--radius-sm);
   }
 
   .issue-actions {
