@@ -1773,22 +1773,26 @@ form:has([data-kind-select] option[value="bug"]:checked) .bug-fields {
 
 footer {
   view-transition-name: site-footer;
-  width: var(--page);
-  margin: 0 auto;
-  padding: var(--space-sm) 0 var(--space-md);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2xs) var(--space-md);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-xs) max(calc((100% - 72rem) / 2 + var(--space-md)), var(--space-md));
   border-top: var(--rule-heavy) solid var(--color-edge);
   color: var(--color-muted);
   font-size: var(--text-xs);
-  line-height: var(--lh-relaxed);
+  line-height: var(--lh-normal);
 }
 
 .colophon {
-  max-width: var(--measure);
-  margin: 0 0 var(--space-sm);
+  flex: 1 1 20rem;
+  margin: 0;
 }
 
 .render-time {
-  margin: 0 0 var(--space-sm);
+  margin: 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1812,7 +1816,8 @@ footer a {
     --page-narrow: min(100% - var(--space-lg), 42rem);
   }
 
-  .site-header {
+  .site-header,
+  footer {
     padding-inline: var(--space-md);
   }
 
