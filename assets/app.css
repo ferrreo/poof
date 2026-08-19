@@ -113,6 +113,7 @@ html[data-theme="dark"] {
 html {
   min-width: 320px;
   height: 100%;
+  overflow-anchor: none;
   background: var(--color-paper);
   color: var(--color-ink);
 }
@@ -142,6 +143,7 @@ body > main {
   overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scroll-padding-top: var(--space-sm);
   scrollbar-width: thin;
   scrollbar-color: var(--color-rule-2) var(--color-paper-2);
   scrollbar-gutter: stable;
@@ -1035,6 +1037,7 @@ select {
 .comment {
   padding: var(--space-md) 0;
   border-bottom: var(--rule-card) solid var(--color-rule);
+  scroll-margin-top: var(--space-sm);
 }
 
 .comment-reply {

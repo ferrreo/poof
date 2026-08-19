@@ -1,6 +1,41 @@
 (() => {
   "use strict";
 
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+  const pageMain = document.querySelector("body > main");
+  const pinRootScroll = () => {
+    if (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop) {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      return true;
+    }
+    return false;
+  };
+  const revealHash = () => {
+    pinRootScroll();
+    const id = location.hash.startsWith("#") ? location.hash.slice(1) : "";
+    if (!id || !pageMain) return;
+    const el = document.getElementById(id);
+    if (!el || !pageMain.contains(el)) return;
+    pageMain.scrollTop +=
+      el.getBoundingClientRect().top - pageMain.getBoundingClientRect().top;
+  };
+  pinRootScroll();
+  revealHash();
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (pinRootScroll()) revealHash();
+    },
+    { passive: true },
+  );
+  window.addEventListener("hashchange", revealHash);
+  window.addEventListener("pagereveal", revealHash);
+  window.addEventListener("pageshow", revealHash);
+  window.addEventListener("load", revealHash);
+
   const themeCookie = "poof_theme";
   const themeToggle = document.querySelector("[data-theme-toggle]");
   const themeLabel = (mode) => {
